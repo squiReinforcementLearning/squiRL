@@ -1,4 +1,4 @@
-# bast
+# bastRL
 An RL library in PyTorch embedded within the PyTorch Lightning framework.
 
 ## Branch names
