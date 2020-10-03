@@ -75,7 +75,7 @@ class RolloutCollector:
 
     def sample(self) -> Tuple:
         states, actions, rewards, dones, next_states = zip(
-            *[self.replay_buffer[i] for i in range(len(self.replay_buffer)-1)])
+            *[self.replay_buffer[i] for i in range(len(self.replay_buffer))])
 
         return (np.array(states), np.array(actions),
                 np.array(rewards, dtype=np.float32),
@@ -118,7 +118,7 @@ class Agent:
             obs = obs.cuda(device)
 
         action_logit = net(obs).to(device)
-        probs = F.softmax(action_logit, dim=1).to(device)
+        probs = F.softmax(action_logit, dim=-1).to(device)
         dist = torch.distributions.Categorical(probs)
         action = dist.sample().item()
         action = int(action)
@@ -166,10 +166,8 @@ class RLDataset(IterableDataset):
                  replay_buffer: RolloutCollector,
                  env: gym.Env,
                  agent: Agent,
-                 net: MLP,
-                 sample_size: int = 200) -> None:
+                 net: MLP) -> None:
         self.replay_buffer = replay_buffer
-        self.sample_size = sample_size
         self.env = env
         self.net = net
         self.agent = agent
@@ -234,14 +232,14 @@ class VPGLightning(pl.LightningModule):
         states, actions, rewards, dones, next_states = batch
 
         action_logit = self.net(states.float()).to(self.device)
-        log_probs = F.log_softmax(action_logit, dim=1).squeeze(0)[actions]
+        log_probs = F.log_softmax(action_logit, dim=-1).squeeze(0)[range(len(actions)), actions]
 
         discounted_rewards = self.reward_to_go(rewards)
         discounted_rewards = torch.tensor(discounted_rewards).to(self.device)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
                 discounted_rewards.std() + self.eps)
 
-        loss = -advantage * log_probs[range(len(actions)), actions]
+        loss = -advantage * log_probs
         return loss.sum()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor],
@@ -303,8 +301,7 @@ class VPGLightning(pl.LightningModule):
     def __dataloader(self) -> DataLoader:
         """Initialize the Replay Buffer dataset used for retrieving
         experiences"""
-        dataset = RLDataset(self.replay_buffer, self.env, self.agent, self.net,
-                            self.hparams.episode_length)
+        dataset = RLDataset(self.replay_buffer, self.env, self.agent, self.net)
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=self.collate_fn,
@@ -318,7 +315,7 @@ class VPGLightning(pl.LightningModule):
 
 
 def main(hparams) -> None:
-    seed_everything(41)
+    seed_everything(42)
 
     wandb_logger = WandbLogger(project='vpg-lightning-test')
     model = VPGLightning(hparams)
@@ -334,7 +331,7 @@ def main(hparams) -> None:
     trainer.fit(model)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
+parser.add_argument("--lr", type=float, default=0.0005, help="learning rate")
 parser.add_argument("--eps",
                     type=float,
                     default=np.finfo(np.float32).eps.item(),
