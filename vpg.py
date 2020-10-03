@@ -11,13 +11,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.seed import seed_everything
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.data._utils import collate
 from torch.utils.data.dataset import IterableDataset
-
-# from pytorch_lightning.loggers import WandbLogger
 
 Experience = namedtuple('Experience',
                         ('state', 'action', 'reward', 'done', 'last_state'))
@@ -205,7 +204,7 @@ class VPGLightning(pl.LightningModule):
         obs_size = self.env.observation_space.shape[0]
         n_actions = self.env.action_space.n
 
-        self.net = MLP(obs_size, n_actions).to('cuda:0')
+        self.net = MLP(obs_size, n_actions)  # .to('cuda:0')
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
 
         self.agent = Agent(self.env, self.replay_buffer)
@@ -243,7 +242,7 @@ class VPGLightning(pl.LightningModule):
                 discounted_rewards.std() + self.eps)
 
         loss = -advantage * log_probs[range(len(actions)), actions]
-        return loss.mean()
+        return loss.sum()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor],
                       nb_batch) -> OrderedDict:
@@ -321,7 +320,7 @@ class VPGLightning(pl.LightningModule):
 def main(hparams) -> None:
     seed_everything(41)
 
-    # wandb_logger = WandbLogger(project='vpg-lightning-test')
+    wandb_logger = WandbLogger(project='vpg-lightning-test')
     model = VPGLightning(hparams)
 
     trainer = pl.Trainer(
@@ -329,7 +328,7 @@ def main(hparams) -> None:
         # distributed_backend='dp',
         max_epochs=2000,
         reload_dataloaders_every_epoch=False,
-        # logger=wandb_logger,
+        logger=wandb_logger,
     )
 
     trainer.fit(model)
