@@ -1,20 +1,21 @@
-import torch
-import torch.nn.functional as F
-import pytorch_lightning as pl
-import numpy as np
-from typing import Tuple, List
-from torch.optim import Optimizer
-from collections import OrderedDict, deque
-import gym
 import argparse
+from collections import OrderedDict, deque
 from collections import namedtuple
-from torch.utils.data.dataset import IterableDataset
+from copy import copy
+from typing import Tuple, List
+
+import gym
+import numpy as np
+import pytorch_lightning as pl
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from pytorch_lightning.utilities.seed import seed_everything
+from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.data._utils import collate
-from copy import copy
-
-import torch.nn as nn
-import torch.optim as optim
+from torch.utils.data.dataset import IterableDataset
 
 # from pytorch_lightning.loggers import WandbLogger
 
@@ -82,7 +83,7 @@ class RolloutCollector:
                 np.array(dones, dtype=np.bool), np.array(next_states))
 
     def empty_buffer(self):
-        self.replay_buffer = deque(maxlen=self.capacity)
+        self.replay_buffer.clear()
 
 
 class Agent:
@@ -186,7 +187,7 @@ class RLDataset(IterableDataset):
             reward, done = self.agent.play_step(self.net)
 
     def __iter__(self):
-        for i in range(4):
+        for i in range(1):
             self.populate()
             states, actions, rewards, dones, new_states = self.replay_buffer.sample()
             yield (states, actions, rewards, dones, new_states)
@@ -239,14 +240,10 @@ class VPGLightning(pl.LightningModule):
         discounted_rewards = self.reward_to_go(rewards)
         discounted_rewards = torch.tensor(discounted_rewards).to(self.device)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
-            discounted_rewards.std() + self.eps).to(self.device)
+                discounted_rewards.std() + self.eps)
 
-        loss = [
-            advantage[i] * log_probs[i][actions[i]]
-            for i in range(len(advantage))
-        ]
-        loss = torch.stack(loss).sum()
-        return loss
+        loss = -advantage * log_probs[range(len(actions)), actions]
+        return loss.mean()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor],
                       nb_batch) -> OrderedDict:
@@ -312,7 +309,7 @@ class VPGLightning(pl.LightningModule):
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=self.collate_fn,
-            batch_size=4,
+            batch_size=1,
         )
         return dataloader
 
@@ -322,6 +319,8 @@ class VPGLightning(pl.LightningModule):
 
 
 def main(hparams) -> None:
+    seed_everything(41)
+
     # wandb_logger = WandbLogger(project='vpg-lightning-test')
     model = VPGLightning(hparams)
 
@@ -334,10 +333,6 @@ def main(hparams) -> None:
     )
 
     trainer.fit(model)
-
-
-torch.manual_seed(42)
-np.random.seed(42)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
