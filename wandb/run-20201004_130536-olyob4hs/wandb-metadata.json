@@ -1,0 +1,26 @@
+{
+    "root": "/src/ahmed/squiRL",
+    "program": "train.py",
+    "git": {
+        "remote": "https://github.com/squiReinforcementLearning/squiRL.git",
+        "commit": "a95675ad82c4cc2c14fa6bf02dddb48769feb4cf"
+    },
+    "email": "elghazalykhalil@gmail.com",
+    "startedAt": "2020-10-04T13:05:36.787582",
+    "host": "56e367dd674f",
+    "username": "root",
+    "executable": "/opt/conda/bin/python",
+    "os": "Linux-4.15.0-112-generic-x86_64-with-debian-buster-sid",
+    "python": "3.6.9",
+    "gpu": "GeForce RTX 2080 Ti",
+    "gpu_count": 4,
+    "cpu_count": 20,
+    "cuda": "10.2.89",
+    "args": [],
+    "state": "finished",
+    "jobType": null,
+    "mode": "run",
+    "project": "vpg-lightning-test",
+    "heartbeatAt": "2020-10-04T13:06:14.528364",
+    "exitcode": 0
+}

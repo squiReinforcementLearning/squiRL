@@ -1,4 +1,4 @@
-from squiRL.vpg import MLP
+from squiRL.common.policies import MLP
 import torch
 import gym
 
