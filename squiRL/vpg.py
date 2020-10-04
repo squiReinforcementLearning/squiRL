@@ -355,4 +355,4 @@ parser.add_argument("--max_episode_reward",
 
 args, _ = parser.parse_known_args()
 
-main(args)
+# main(args)
