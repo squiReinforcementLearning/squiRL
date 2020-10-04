@@ -3,7 +3,6 @@ from collections import OrderedDict, deque
 from collections import namedtuple
 from copy import copy
 from typing import Tuple, List
-
 import gym
 import numpy as np
 import pytorch_lightning as pl
