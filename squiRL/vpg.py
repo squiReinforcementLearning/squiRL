@@ -1,21 +1,21 @@
-import torch
-import torch.nn.functional as F
-import pytorch_lightning as pl
-import numpy as np
-from typing import Tuple, List
-from torch.optim import Optimizer
-from collections import OrderedDict, deque
-import gym
 import argparse
+from collections import OrderedDict, deque
 from collections import namedtuple
-from torch.utils.data.dataset import IterableDataset
+from copy import copy
+from typing import Tuple, List
+import gym
+import numpy as np
+import pytorch_lightning as pl
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.utilities.seed import seed_everything
+from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.data._utils import collate
-
-import torch.nn as nn
-import torch.optim as optim
-
-from pytorch_lightning.loggers import WandbLogger
+from torch.utils.data.dataset import IterableDataset
 
 Experience = namedtuple('Experience',
                         ('state', 'action', 'reward', 'done', 'last_state'))
@@ -74,19 +74,19 @@ class RolloutCollector:
 
     def sample(self) -> Tuple:
         states, actions, rewards, dones, next_states = zip(
-            *[exp for exp in self.replay_buffer])
+            *[self.replay_buffer[i] for i in range(len(self.replay_buffer))])
 
         return (np.array(states), np.array(actions),
                 np.array(rewards, dtype=np.float32),
                 np.array(dones, dtype=np.bool), np.array(next_states))
 
     def empty_buffer(self):
-        self.replay_buffer = deque(maxlen=self.capacity)
+        self.replay_buffer.clear()
 
 
 class Agent:
     """
-    Base Agent class handeling the interaction with the environment
+    Base Agent class handling the interaction with the environment
 
     Args:
         env: training environment
@@ -117,7 +117,7 @@ class Agent:
             obs = obs.cuda(device)
 
         action_logit = net(obs).to(device)
-        probs = F.softmax(action_logit, dim=1).to(device)
+        probs = F.softmax(action_logit, dim=-1).to(device)
         dist = torch.distributions.Categorical(probs)
         action = dist.sample().item()
         action = int(action)
@@ -165,21 +165,28 @@ class RLDataset(IterableDataset):
                  replay_buffer: RolloutCollector,
                  env: gym.Env,
                  agent: Agent,
-                 net: MLP,
-                 sample_size: int = 200) -> None:
+                 net: MLP) -> None:
         self.replay_buffer = replay_buffer
-        self.sample_size = sample_size
         self.env = env
         self.net = net
         self.agent = agent
         self.device = 'cuda:0'  # need a better way
 
-    def __iter__(self) -> Tuple:
-        states, actions, rewards, dones, new_states = self.replay_buffer.sample(
-        )
-        for i in range(len(dones)):
-            yield states[i], actions[i], rewards[i], dones[i], new_states[
-                i]
+    def populate(self) -> None:
+        """
+        Samples an entire episode
+
+        """
+        self.replay_buffer.empty_buffer()
+        done = False
+        while not done:
+            reward, done = self.agent.play_step(self.net)
+
+    def __iter__(self):
+        for i in range(1):
+            self.populate()
+            states, actions, rewards, dones, new_states = self.replay_buffer.sample()
+            yield (states, actions, rewards, dones, new_states)
 
 
 class VPGLightning(pl.LightningModule):
@@ -194,27 +201,21 @@ class VPGLightning(pl.LightningModule):
         obs_size = self.env.observation_space.shape[0]
         n_actions = self.env.action_space.n
 
-        self.net = MLP(obs_size, n_actions).to('cuda:0')
+        self.net = MLP(obs_size, n_actions)  # .to('cuda:0')
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
 
         self.agent = Agent(self.env, self.replay_buffer)
         self.episode_reward = 0
-        self.populate()
 
-    def populate(self) -> None:
-        """
-        Samples an entire episode
-
-        """
-        self.replay_buffer.empty_buffer()
-        done = False
-        while not done:
-            reward, done = self.agent.play_step(self.net)
-
-    def reward_to_go(self, rewards: torch.Tensor) -> torch.Tensor:
-        return np.sum([
-            rewards[i] * np.power(self.gamma, i) for i in range(len(rewards))
-        ])
+    def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
+        rewards = rewards.detach().cpu().numpy()
+        res = []
+        sum_r = 0.0
+        for r in reversed(rewards):
+            sum_r *= self.gamma
+            sum_r += r
+            res.append(copy(sum_r))
+        return list(reversed(res))
 
     def vpg_loss(self, batch: Tuple[torch.Tensor,
                                     torch.Tensor]) -> torch.Tensor:
@@ -227,25 +228,18 @@ class VPGLightning(pl.LightningModule):
         Returns:
             loss
         """
-        self.populate()
         states, actions, rewards, dones, next_states = batch
 
         action_logit = self.net(states.float()).to(self.device)
-        log_probs = F.log_softmax(action_logit, dim=1).squeeze(0)[actions]
+        log_probs = F.log_softmax(action_logit, dim=-1).squeeze(0)[range(len(actions)), actions]
 
-        discounted_rewards = [
-            self.reward_to_go(rewards[i:]) for i in range(len(rewards))
-        ]
+        discounted_rewards = self.reward_to_go(rewards)
         discounted_rewards = torch.tensor(discounted_rewards).to(self.device)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
-            discounted_rewards.std() + self.eps).to(self.device)
+                discounted_rewards.std() + self.eps)
 
-        loss = [
-            advantage[i] * log_probs[i][actions[i]]
-            for i in range(len(advantage))
-        ]
-        loss = torch.stack(loss).sum()
-        return loss
+        loss = -advantage * log_probs
+        return loss.sum()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor],
                       nb_batch) -> OrderedDict:
@@ -280,8 +274,8 @@ class VPGLightning(pl.LightningModule):
 
         return result
 
-    def on_train_batch_start(self, batch, batch_idx, dataloader_idx):
-        _, _, rewards, _, _ = batch
+    # def on_train_batch_start(self, batch, batch_idx, dataloader_idx):
+    #     _, _, rewards, _, _ = batch
 
     def configure_optimizers(self) -> List[Optimizer]:
         """ Initialize Adam optimizer"""
@@ -293,17 +287,24 @@ class VPGLightning(pl.LightningModule):
         return batch[0].device.index if self.on_gpu else 'cpu'
 
     def collate_fn(self, batch):
-        return collate.default_collate(batch)
+        batch = collate.default_convert(batch)
+
+        states = torch.cat([s[0] for s in batch])
+        actions = torch.cat([s[1] for s in batch])
+        rewards = torch.cat([s[2] for s in batch])
+        dones = torch.cat([s[3] for s in batch])
+        next_states = torch.cat([s[4] for s in batch])
+
+        return states, actions, rewards, dones, next_states
 
     def __dataloader(self) -> DataLoader:
         """Initialize the Replay Buffer dataset used for retrieving
         experiences"""
-        dataset = RLDataset(self.replay_buffer, self.env, self.agent, self.net,
-                            self.hparams.episode_length)
+        dataset = RLDataset(self.replay_buffer, self.env, self.agent, self.net)
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=self.collate_fn,
-            batch_size=self.replay_buffer.__len__(),
+            batch_size=1,
         )
         return dataloader
 
@@ -313,6 +314,8 @@ class VPGLightning(pl.LightningModule):
 
 
 def main(hparams) -> None:
+    seed_everything(42)
+
     wandb_logger = WandbLogger(project='vpg-lightning-test')
     model = VPGLightning(hparams)
 
@@ -320,18 +323,14 @@ def main(hparams) -> None:
         gpus=1,
         # distributed_backend='dp',
         max_epochs=2000,
-        reload_dataloaders_every_epoch=True,
+        reload_dataloaders_every_epoch=False,
         logger=wandb_logger,
     )
 
     trainer.fit(model)
 
-
-torch.manual_seed(42)
-np.random.seed(42)
-
 parser = argparse.ArgumentParser()
-parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
+parser.add_argument("--lr", type=float, default=0.0005, help="learning rate")
 parser.add_argument("--eps",
                     type=float,
                     default=np.finfo(np.float32).eps.item(),
