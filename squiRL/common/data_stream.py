@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch.utils.data.dataset import IterableDataset
 from collections import deque
 from collections import namedtuple
@@ -61,6 +62,7 @@ class RLDataset(IterableDataset):
         self.env = env
         self.net = net
         self.agent = agent
+        self.holder = torch.tensor([])
         self.device = 'cuda:0'  # need a better way
 
     def populate(self) -> None:

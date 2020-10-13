@@ -1,7 +1,9 @@
 import argparse
+from argparse import ArgumentParser
 from copy import copy
 from typing import Tuple, List
 import gym
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -11,15 +13,15 @@ from torch.utils.data import DataLoader
 from torch.utils.data._utils import collate
 from collections import OrderedDict
 
-from squiRL.common.policies import MLP
+from squiRL.common import reg_policies
 from squiRL.common.data_stream import RLDataset, RolloutCollector
 from squiRL.common.agents import Agent
 
 
-class VPGLightning(pl.LightningModule):
+class VPG(pl.LightningModule):
     """ Basic VPG Model """
     def __init__(self, hparams: argparse.Namespace) -> None:
-        super().__init__()
+        super(VPG, self).__init__()
         self.hparams = hparams
 
         self.env = gym.make(self.hparams.env)
@@ -28,11 +30,37 @@ class VPGLightning(pl.LightningModule):
         obs_size = self.env.observation_space.shape[0]
         n_actions = self.env.action_space.n
 
-        self.net = MLP(obs_size, n_actions)  # .to('cuda:0')
+        self.net = reg_policies[self.hparams.policy](
+            obs_size, n_actions)
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
 
         self.agent = Agent(self.env, self.replay_buffer)
         self.episode_reward = 0
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+        parser.add_argument("--policy",
+                            type=str,
+                            default='MLP',
+                            help="NN policy used by agent")
+        parser.add_argument("--lr",
+                            type=float,
+                            default=0.0005,
+                            help="learning rate")
+        parser.add_argument("--eps",
+                            type=float,
+                            default=np.finfo(np.float32).eps.item(),
+                            help="small offset")
+        parser.add_argument("--gamma",
+                            type=float,
+                            default=0.99,
+                            help="discount factor")
+        parser.add_argument("--num_workers",
+                            type=int,
+                            default=20,
+                            help="num of dataloader cpu workers")
+        return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
         rewards = rewards.detach().cpu().numpy()
@@ -57,15 +85,16 @@ class VPGLightning(pl.LightningModule):
         """
         states, actions, rewards, dones, next_states = batch
 
-        action_logit = self.net(states.float()).to(self.device)
+        action_logit = self.net(states.float())
         log_probs = F.log_softmax(action_logit,
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
         discounted_rewards = self.reward_to_go(rewards)
-        discounted_rewards = torch.tensor(discounted_rewards).to(self.device)
+        discounted_rewards = torch.tensor(discounted_rewards)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
             discounted_rewards.std() + self.eps)
+        advantage = advantage.type_as(log_probs)
 
         loss = -advantage * log_probs
         return loss.sum()
@@ -102,9 +131,6 @@ class VPGLightning(pl.LightningModule):
                    logger=True)
 
         return result
-
-    # def on_train_batch_start(self, batch, batch_idx, dataloader_idx):
-    #     _, _, rewards, _, _ = batch
 
     def configure_optimizers(self) -> List[Optimizer]:
         """ Initialize Adam optimizer"""

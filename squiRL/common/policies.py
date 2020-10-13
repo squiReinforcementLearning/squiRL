@@ -23,6 +23,7 @@ class MLP(nn.Module):
         self.layers_n = len(self.fc) - 1
 
     def forward(self, x):
+        x = x.type_as(next(self.parameters()))
         for n in range(self.layers_n):
             x = F.relu(self.fc[n](x))
         x = self.fc[self.layers_n](x)
