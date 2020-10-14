@@ -29,3 +29,15 @@ Any script you add in the tests directory with the name test_….py like the scr
 So just come up with a test, add it to the tests folder and voila.  
 When you are developing on the command line and you want to run the tests locally, go to the tests directory and run `pytest` on the command line. This will run all the tests in the directory.  
 You would need to install the `pytest` module from pip first of course.
+
+## Cite
+To cite this repository in publications:
+
+    @misc{squiRL,
+      author = {Khalil, Ahmed and },
+      title = {squiRL},
+      year = {2020},
+      publisher = {GitHub},
+      journal = {GitHub repository},
+      howpublished = {\url{https://github.com/squiReinforcementLearning/squiRL}},
+    }
