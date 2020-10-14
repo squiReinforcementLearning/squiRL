@@ -22,19 +22,19 @@ from squiRL.common.agents import Agent
 
 class VPG(pl.LightningModule):
     """Basic Vanilla Policy Gradient training acrhitecture
-    
+
     Attributes:
         agent (Agent): Agent that interacts with env
         env (gym.Env): OpenAI gym environment
         eps (float): Small offset used in calculating loss
         gamma (float): Discount rate
         hparams (argeparse.Namespace): Stores all passed args
-        net (TYPE): NN used to learn policy. Class depends on choice
+        net (nn.Module): NN used to learn policy
         replay_buffer (RolloutCollector): Stores generated experience
     """
     def __init__(self, hparams: argparse.Namespace) -> None:
         """Initializes VPG class
-        
+
         Args:
             hparams (argparse.Namespace): Stores all passed args
         """
@@ -47,19 +47,19 @@ class VPG(pl.LightningModule):
         obs_size = self.env.observation_space.shape[0]
         n_actions = self.env.action_space.n
 
-        self.net = reg_policies[self.hparams.policy](
-            obs_size, n_actions)
+        self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
 
         self.agent = Agent(self.env, self.replay_buffer)
 
     @staticmethod
-    def add_model_specific_args(parent_parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    def add_model_specific_args(
+            parent_parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         """Adds model specific config args to parser
-        
+
         Args:
             parent_parser (argparse.ArgumentParser): Argument parser
-        
+
         Returns:
             argparse.ArgumentParser: Updated argument parser
         """
@@ -88,10 +88,10 @@ class VPG(pl.LightningModule):
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
         """Calculates reward to go over an entire episode
-        
+
         Args:
             rewards (torch.Tensor): Episode rewards
-        
+
         Returns:
             torch.tensor: Reward to go for each episode step
         """
@@ -107,12 +107,14 @@ class VPG(pl.LightningModule):
     def vpg_loss(self, batch: Tuple[torch.Tensor,
                                     torch.Tensor]) -> torch.Tensor:
         """
-        Calculates the loss based on the REINFORCE objective, using the discounted 
+        Calculates the loss based on the REINFORCE objective, using the
+        discounted
         reward to go per episode step
-        
+
         Args:
-            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of replay data
-        
+            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of
+            replay data
+
         Returns:
             torch.Tensor: Calculated loss
         """
@@ -136,12 +138,13 @@ class VPG(pl.LightningModule):
                       nb_batch) -> OrderedDict:
         """
         Carries out an entire episode in env and calculates loss
-        
+
         Returns:
             OrderedDict: Training step result
-        
+
         Args:
-            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of replay data
+            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of
+            replay data
             nb_batch (TYPE): Current index of mini batch of replay data
         """
         _, _, rewards, _, _ = batch
@@ -170,7 +173,7 @@ class VPG(pl.LightningModule):
 
     def configure_optimizers(self) -> List[Optimizer]:
         """Initialize Adam optimizer
-        
+
         Returns:
             List[Optimizer]: List of used optimizers
         """
@@ -179,10 +182,10 @@ class VPG(pl.LightningModule):
 
     def collate_fn(self, batch):
         """Manually processes collected batch of experience
-        
+
         Args:
             batch (TYPE): Current mini batch of replay data
-        
+
         Returns:
             TYPE: Processed mini batch of replay data
         """
@@ -198,7 +201,7 @@ class VPG(pl.LightningModule):
 
     def __dataloader(self) -> DataLoader:
         """Initialize the RL dataset used for retrieving experiences
-        
+
         Returns:
             DataLoader: Handles loading the data for training
         """
@@ -212,7 +215,7 @@ class VPG(pl.LightningModule):
 
     def train_dataloader(self) -> DataLoader:
         """Get train data loader
-        
+
         Returns:
             DataLoader: Handles loading the data for training
         """

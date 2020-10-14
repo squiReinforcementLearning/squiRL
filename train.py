@@ -1,5 +1,5 @@
 """Training script for interfacing with library. This script
-can be used from the commandline/yaml to run any of the 
+can be used from the commandline/yaml to run any of the
 algorithms in squiRL
 
 Attributes:
@@ -15,7 +15,7 @@ import squiRL
 
 def main(hparams) -> None:
     """Runs algorithm
-    
+
     Args:
         hparams (argparse.Namespace): Stores all passed args
     """

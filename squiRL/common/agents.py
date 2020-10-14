@@ -12,10 +12,10 @@ from squiRL.common.data_stream import Experience
 class Agent:
     """
     Base Agent class handling the interaction with the environment
-    
+
     Args:
         env: training environment
-    
+
     Attributes:
         env (gym.Env): OpenAI gym training environment
         obs (int): Array of env observation state
@@ -23,7 +23,7 @@ class Agent:
     """
     def __init__(self, env: gym.Env, replay_buffer) -> None:
         """Initializes agent class
-        
+
         Args:
             env (gym.Env): OpenAI gym training environment
             replay_buffer (TYPE): Data collector for saving experience
@@ -39,10 +39,10 @@ class Agent:
 
     def process_obs(self, obs: int) -> torch.Tensor:
         """Converts obs np.array to torch.Tensor for passing through NN
-        
+
         Args:
             obs (int): Array of env observation state
-        
+
         Returns:
             torch.Tensor: Torch tensor of observation
         """
@@ -54,10 +54,10 @@ class Agent:
     ) -> int:
         """
         Using the given network, decide what action to carry out
-        
+
         Args:
             net (nn.Module): Policy network
-        
+
         Returns:
             action (int): Action to be carried out
         """
@@ -78,7 +78,7 @@ class Agent:
         """
         Carries out a single interaction step between the agent and the
         environment
-        
+
         Args:
             net (nn.Module): Policy network
 

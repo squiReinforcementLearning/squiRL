@@ -7,12 +7,13 @@ import torch.nn.functional as F
 class MLP(nn.Module):
     """
     Simple MLP network
-    
+
     Args:
         obs_size (int): Observation/obs size of the environment
-        n_actions (int): Number of discrete actions available in the environment
+        n_actions (int): Number of discrete actions available in the
+        environment
         layers (int): Size of hidden layers
-    
+
     Attributes:
         fc (nn.ModuleList): Network architecture definition
         layers_n (int): Description
@@ -20,10 +21,11 @@ class MLP(nn.Module):
     """
     def __init__(self, obs_size: int, n_actions: int, layers: int = [64, 32]):
         """Initializes MLP policy network
-        
+
         Args:
             obs_size (int): Observation/obs size of the environment
-            n_actions (int): Number of discrete actions available in the environment
+            n_actions (int): Number of discrete actions available in the
+            environment
         """
         super(MLP, self).__init__()
         self.fc = nn.ModuleList()
@@ -36,10 +38,10 @@ class MLP(nn.Module):
 
     def forward(self, x):
         """Forward pass through NN
-        
+
         Args:
             x (torch.Tensor): Env observation/state
-        
+
         Returns:
             torch.Tensor: Action logit
         """
