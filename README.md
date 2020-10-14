@@ -34,7 +34,7 @@ You would need to install the `pytest` module from pip first of course.
 To cite this repository in publications:
 
     @misc{squiRL,
-      author = {Khalil, Ahmed and },
+      author = {Khalil, Ahmed and Anca, Mihai and},
       title = {squiRL},
       year = {2020},
       publisher = {GitHub},
