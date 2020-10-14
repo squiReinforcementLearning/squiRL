@@ -1,3 +1,11 @@
+"""Training script for interfacing with library. This script
+can be used from the commandline/yaml to run any of the 
+algorithms in squiRL
+
+Attributes:
+    args (argparse.Namespace): Parsed config arguments for running script
+    parser (argparse.ArgumentParser): Argument parser
+"""
 import argparse
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.seed import seed_everything
@@ -6,6 +14,11 @@ import squiRL
 
 
 def main(hparams) -> None:
+    """Runs algorithm
+    
+    Args:
+        hparams (argparse.Namespace): Stores all passed args
+    """
     if hparams.debug:
         hparams.logger = None
         hparams.profiler = True
