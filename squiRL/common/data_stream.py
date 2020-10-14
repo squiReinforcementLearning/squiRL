@@ -1,3 +1,8 @@
+"""Contains RL experience buffers
+
+Attributes:
+    Experience (namedtuple): An environment step experience
+"""
 import numpy as np
 from torch.utils.data.dataset import IterableDataset
 from collections import deque
@@ -16,13 +21,27 @@ class RolloutCollector:
     them
 
     Args:
-        capacity: size of the buffer
+        capacity: Size of the buffer
+
+    Attributes:
+        capacity (int): Size of the buffer
+        replay_buffer (deque): Experience buffer
     """
     def __init__(self, capacity: int) -> None:
+        """Summary
+
+        Args:
+            capacity (int): Description
+        """
         self.capacity = capacity
         self.replay_buffer = deque(maxlen=self.capacity)
 
-    def __len__(self) -> None:
+    def __len__(self) -> int:
+        """Calculates length of buffer
+
+        Returns:
+            int: Length of buffer
+        """
         return len(self.replay_buffer)
 
     def append(self, experience: Experience) -> None:
@@ -30,11 +49,17 @@ class RolloutCollector:
         Add experience to the buffer
 
         Args:
-            experience: tuple (state, action, reward, done, new_state)
+            experience (Experience): Tuple (state, action, reward, done,
+            new_state)
         """
         self.replay_buffer.append(experience)
 
     def sample(self) -> Tuple:
+        """Sample experience from buffer
+
+        Returns:
+            Tuple: Sampled experience
+        """
         states, actions, rewards, dones, next_states = zip(
             *[self.replay_buffer[i] for i in range(len(self.replay_buffer))])
 
@@ -42,7 +67,9 @@ class RolloutCollector:
                 np.array(rewards, dtype=np.float32),
                 np.array(dones, dtype=np.bool), np.array(next_states))
 
-    def empty_buffer(self):
+    def empty_buffer(self) -> None:
+        """Empty replay buffer
+        """
         self.replay_buffer.clear()
 
 
@@ -52,16 +79,29 @@ class RLDataset(IterableDataset):
     which will be updated with new experiences during training
 
     Args:
-        replay_buffer: replay buffer
-        sample_size: number of experiences to sample at a time
+        replay_buffer: Replay buffer
+        sample_size: Number of experiences to sample at a time
+
+    Attributes:
+        agent (Agent): Agent that interacts with env
+        env (gym.Env): OpenAI gym environment
+        net (nn.Module): Policy network
+        replay_buffer: Replay buffer
     """
-    def __init__(self, replay_buffer: RolloutCollector, env: gym.Env,
-                 net: MLP, agent) -> None:
+    def __init__(self, replay_buffer: RolloutCollector, env: gym.Env, net: MLP,
+                 agent) -> None:
+        """Summary
+
+        Args:
+            replay_buffer (RolloutCollector): Description
+            env (gym.Env): OpenAI gym environment
+            net (nn.Module): Policy network
+            agent (Agent): Agent that interacts with env
+        """
         self.replay_buffer = replay_buffer
         self.env = env
         self.net = net
         self.agent = agent
-        self.device = 'cuda:0'  # need a better way
 
     def populate(self) -> None:
         """
@@ -74,6 +114,11 @@ class RLDataset(IterableDataset):
             reward, done = self.agent.play_step(self.net)
 
     def __iter__(self):
+        """Iterates over sampled batch
+
+        Yields:
+            Tuple: Sampled experience
+        """
         for i in range(1):
             self.populate()
             states, actions, rewards, dones, new_states = self.replay_buffer.sample(

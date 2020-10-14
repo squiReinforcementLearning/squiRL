@@ -1,7 +1,11 @@
+"""Script for training workflow of the Vanilla Policy Gradient Algorithm.
+"""
 import argparse
+from argparse import ArgumentParser
 from copy import copy
 from typing import Tuple, List
 import gym
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -11,15 +15,30 @@ from torch.utils.data import DataLoader
 from torch.utils.data._utils import collate
 from collections import OrderedDict
 
-from squiRL.common.policies import MLP
+from squiRL.common import reg_policies
 from squiRL.common.data_stream import RLDataset, RolloutCollector
 from squiRL.common.agents import Agent
 
 
-class VPGLightning(pl.LightningModule):
-    """ Basic VPG Model """
+class VPG(pl.LightningModule):
+    """Basic Vanilla Policy Gradient training acrhitecture
+
+    Attributes:
+        agent (Agent): Agent that interacts with env
+        env (gym.Env): OpenAI gym environment
+        eps (float): Small offset used in calculating loss
+        gamma (float): Discount rate
+        hparams (argeparse.Namespace): Stores all passed args
+        net (nn.Module): NN used to learn policy
+        replay_buffer (RolloutCollector): Stores generated experience
+    """
     def __init__(self, hparams: argparse.Namespace) -> None:
-        super().__init__()
+        """Initializes VPG class
+
+        Args:
+            hparams (argparse.Namespace): Stores all passed args
+        """
+        super(VPG, self).__init__()
         self.hparams = hparams
 
         self.env = gym.make(self.hparams.env)
@@ -28,13 +47,54 @@ class VPGLightning(pl.LightningModule):
         obs_size = self.env.observation_space.shape[0]
         n_actions = self.env.action_space.n
 
-        self.net = MLP(obs_size, n_actions)  # .to('cuda:0')
+        self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
 
         self.agent = Agent(self.env, self.replay_buffer)
-        self.episode_reward = 0
+
+    @staticmethod
+    def add_model_specific_args(
+            parent_parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+        """Adds model specific config args to parser
+
+        Args:
+            parent_parser (argparse.ArgumentParser): Argument parser
+
+        Returns:
+            argparse.ArgumentParser: Updated argument parser
+        """
+        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+        parser.add_argument("--policy",
+                            type=str,
+                            default='MLP',
+                            help="NN policy used by agent")
+        parser.add_argument("--lr",
+                            type=float,
+                            default=0.0005,
+                            help="learning rate")
+        parser.add_argument("--eps",
+                            type=float,
+                            default=np.finfo(np.float32).eps.item(),
+                            help="small offset")
+        parser.add_argument("--gamma",
+                            type=float,
+                            default=0.99,
+                            help="discount factor")
+        parser.add_argument("--num_workers",
+                            type=int,
+                            default=20,
+                            help="num of dataloader cpu workers")
+        return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
+        """Calculates reward to go over an entire episode
+
+        Args:
+            rewards (torch.Tensor): Episode rewards
+
+        Returns:
+            torch.tensor: Reward to go for each episode step
+        """
         rewards = rewards.detach().cpu().numpy()
         res = []
         sum_r = 0.0
@@ -47,25 +107,29 @@ class VPGLightning(pl.LightningModule):
     def vpg_loss(self, batch: Tuple[torch.Tensor,
                                     torch.Tensor]) -> torch.Tensor:
         """
-        Calculates the CE loss using a mini batch of a full episode
+        Calculates the loss based on the REINFORCE objective, using the
+        discounted
+        reward to go per episode step
 
         Args:
-            batch: current mini batch of replay data
+            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of
+            replay data
 
         Returns:
-            loss
+            torch.Tensor: Calculated loss
         """
         states, actions, rewards, dones, next_states = batch
 
-        action_logit = self.net(states.float()).to(self.device)
+        action_logit = self.net(states.float())
         log_probs = F.log_softmax(action_logit,
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
         discounted_rewards = self.reward_to_go(rewards)
-        discounted_rewards = torch.tensor(discounted_rewards).to(self.device)
+        discounted_rewards = torch.tensor(discounted_rewards)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
             discounted_rewards.std() + self.eps)
+        advantage = advantage.type_as(log_probs)
 
         loss = -advantage * log_probs
         return loss.sum()
@@ -76,12 +140,16 @@ class VPGLightning(pl.LightningModule):
         Carries out an entire episode in env and calculates loss
 
         Returns:
-            Training loss and log metrics
+            OrderedDict: Training step result
+
+        Args:
+            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of
+            replay data
+            nb_batch (TYPE): Current index of mini batch of replay data
         """
         _, _, rewards, _, _ = batch
-        self.episode_reward = rewards.sum().detach()
+        episode_reward = rewards.sum().detach()
 
-        # calculates training loss
         loss = self.vpg_loss(batch)
 
         if self.trainer.use_dp or self.trainer.use_ddp2:
@@ -95,7 +163,7 @@ class VPGLightning(pl.LightningModule):
                    prog_bar=False,
                    logger=True)
         result.log('episode_reward',
-                   self.episode_reward,
+                   episode_reward,
                    on_step=True,
                    on_epoch=True,
                    prog_bar=True,
@@ -103,19 +171,24 @@ class VPGLightning(pl.LightningModule):
 
         return result
 
-    # def on_train_batch_start(self, batch, batch_idx, dataloader_idx):
-    #     _, _, rewards, _, _ = batch
-
     def configure_optimizers(self) -> List[Optimizer]:
-        """ Initialize Adam optimizer"""
+        """Initialize Adam optimizer
+
+        Returns:
+            List[Optimizer]: List of used optimizers
+        """
         optimizer = optim.Adam(self.net.parameters(), lr=self.hparams.lr)
         return [optimizer]
 
-    def get_device(self, batch) -> str:
-        """Retrieve device currently being used by minibatch"""
-        return batch[0].device.index if self.on_gpu else 'cpu'
-
     def collate_fn(self, batch):
+        """Manually processes collected batch of experience
+
+        Args:
+            batch (TYPE): Current mini batch of replay data
+
+        Returns:
+            TYPE: Processed mini batch of replay data
+        """
         batch = collate.default_convert(batch)
 
         states = torch.cat([s[0] for s in batch])
@@ -127,8 +200,11 @@ class VPGLightning(pl.LightningModule):
         return states, actions, rewards, dones, next_states
 
     def __dataloader(self) -> DataLoader:
-        """Initialize the Replay Buffer dataset used for retrieving
-        experiences"""
+        """Initialize the RL dataset used for retrieving experiences
+
+        Returns:
+            DataLoader: Handles loading the data for training
+        """
         dataset = RLDataset(self.replay_buffer, self.env, self.net, self.agent)
         dataloader = DataLoader(
             dataset=dataset,
@@ -138,5 +214,9 @@ class VPGLightning(pl.LightningModule):
         return dataloader
 
     def train_dataloader(self) -> DataLoader:
-        """Get train loader"""
+        """Get train data loader
+
+        Returns:
+            DataLoader: Handles loading the data for training
+        """
         return self.__dataloader()
