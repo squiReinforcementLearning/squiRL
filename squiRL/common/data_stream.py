@@ -3,13 +3,15 @@
 Attributes:
     Experience (namedtuple): An environment step experience
 """
-import numpy as np
-from torch.utils.data.dataset import IterableDataset
 from collections import deque
 from collections import namedtuple
-from squiRL.common.policies import MLP
-import gym
 from typing import Tuple
+
+import gym
+import numpy as np
+from torch.utils.data.dataset import IterableDataset
+
+from squiRL.common.policies import MLP
 
 Experience = namedtuple('Experience',
                         ('state', 'action', 'reward', 'done', 'last_state'))
@@ -88,8 +90,9 @@ class RLDataset(IterableDataset):
         net (nn.Module): Policy network
         replay_buffer: Replay buffer
     """
+
     def __init__(self, replay_buffer: RolloutCollector, env: gym.Env, net: MLP,
-                 agent) -> None:
+                 agent, episodes_per_batch: int = 1) -> None:
         """Summary
 
         Args:
@@ -102,6 +105,7 @@ class RLDataset(IterableDataset):
         self.env = env
         self.net = net
         self.agent = agent
+        self.episodes_per_batch = episodes_per_batch
 
     def populate(self) -> None:
         """
@@ -119,7 +123,7 @@ class RLDataset(IterableDataset):
         Yields:
             Tuple: Sampled experience
         """
-        for i in range(1):
+        for i in range(self.episodes_per_batch):
             self.populate()
             states, actions, rewards, dones, new_states = self.replay_buffer.sample(
             )
