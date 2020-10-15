@@ -36,12 +36,23 @@ group_prog = parser.add_argument_group("program_args")
 group_env = parser.add_argument_group("environment_args")
 
 # add PROGRAM level args
-group_prog.add_argument('--seed', type=int, default=42)
-group_prog.add_argument('--debug', type=bool, default=False)
-group_prog.add_argument('--algorithm', type=str, default='VPG')
+group_prog.add_argument('--seed', type=int, default=42, help="experiment seed")
+group_prog.add_argument(
+    '--debug',
+    type=bool,
+    default=False,
+    help="stops logging to wandb, turns on profiler, sets num_workers "
+    "to None, to allow debugging on a single thread")
+group_prog.add_argument('--algorithm',
+                        type=str,
+                        default='VPG',
+                        help="DRL algorithm")
 args, remaining_args = parser.parse_known_args()
 group_alg = parser.add_argument_group(args.algorithm + "_args")
-group_prog.add_argument('--project', type=str, default=args.algorithm)
+group_prog.add_argument('--project',
+                        type=str,
+                        default=args.algorithm,
+                        help="project name for wandb logs")
 
 # add environment specific args
 group_env.add_argument("--env",
