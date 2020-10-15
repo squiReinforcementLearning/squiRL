@@ -54,7 +54,7 @@ class VPG(pl.LightningModule):
 
     @staticmethod
     def add_model_specific_args(
-            parent_parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+            parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         """Adds model specific config args to parser
 
         Args:
@@ -63,7 +63,6 @@ class VPG(pl.LightningModule):
         Returns:
             argparse.ArgumentParser: Updated argument parser
         """
-        parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument("--policy",
                             type=str,
                             default='MLP',

@@ -31,36 +31,45 @@ def main(hparams) -> None:
     trainer.fit(algorithm)
 
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(add_help=False)
+group_prog = parser.add_argument_group("program_args")
+group_env = parser.add_argument_group("environment_args")
 
 # add PROGRAM level args
-parser.add_argument('--seed', type=int, default=42)
-parser.add_argument('--debug', type=bool, default=False)
-parser.add_argument('--algorithm', type=str, default='VPG')
-args, _ = parser.parse_known_args()
-parser.add_argument('--project', type=str, default=args.algorithm)
+group_prog.add_argument('--seed', type=int, default=42)
+group_prog.add_argument('--debug', type=bool, default=False)
+group_prog.add_argument('--algorithm', type=str, default='VPG')
+args, remaining_args = parser.parse_known_args()
+group_alg = parser.add_argument_group(args.algorithm + "_args")
+group_prog.add_argument('--project', type=str, default=args.algorithm)
 
 # add environment specific args
-parser.add_argument("--env",
-                    type=str,
-                    default="CartPole-v0",
-                    help="gym environment tag")
-parser.add_argument("--episode_length",
-                    type=int,
-                    default=200,
-                    help="max length of an episode")
-parser.add_argument("--max_episode_reward",
-                    type=int,
-                    default=200,
-                    help="max episode reward in the environment")
+group_env.add_argument("--env",
+                       type=str,
+                       default="CartPole-v0",
+                       help="gym environment tag")
+group_env.add_argument("--episode_length",
+                       type=int,
+                       default=200,
+                       help="max length of an episode")
+group_env.add_argument("--max_episode_reward",
+                       type=int,
+                       default=200,
+                       help="max episode reward in the environment")
 
 # add algorithm specific args
-parser = squiRL.reg_algorithms[args.algorithm].add_model_specific_args(parser)
+group_alg = squiRL.reg_algorithms[args.algorithm].add_model_specific_args(
+    group_alg)
 
 # add all the available trainer options to argparse
 parser = pl.Trainer.add_argparse_args(parser)
 
+# this is done to add all args to help
+parser = argparse.ArgumentParser(parents=[parser])
+
 args = parser.parse_args()
 args, _ = parser.parse_known_args()
+
+print(args)
 
 main(args)
