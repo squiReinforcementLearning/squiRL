@@ -46,11 +46,12 @@ class VPG(pl.LightningModule):
         self.gamma = self.hparams.gamma
         self.eps = self.hparams.eps
         self.episodes_per_batch = self.hparams.episodes_per_batch
+        self.num_workers = hparams.num_workers
         obs_size = self.env.observation_space.shape[0]
         n_actions = self.env.action_space.n
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
-        self.replay_buffer = RolloutCollector(self.hparams.episode_length)
+        self.replay_buffer = RolloutCollector(self.hparams.episode_length, self.env.observation_space.shape, self.env.action_space.shape)
 
         self.agent = Agent(self.env, self.replay_buffer)
 
@@ -128,8 +129,10 @@ class VPG(pl.LightningModule):
 
         action_logit = self.net(states.float())
         log_probs = F.log_softmax(action_logit,
-                                  dim=-1).squeeze(0)[range(len(actions)),
-                                                     actions]
+                                  dim=-1)[range(len(actions)),
+                                                     actions.long()]
+
+
 
         discounted_rewards = self.reward_to_go(rewards)
         discounted_rewards = torch.tensor(discounted_rewards)
@@ -215,6 +218,8 @@ class VPG(pl.LightningModule):
             dataset=dataset,
             collate_fn=self.collate_fn,
             batch_size=self.episodes_per_batch,
+            num_workers=self.num_workers,
+            pin_memory=True
         )
         return dataloader
 
