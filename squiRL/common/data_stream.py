@@ -7,8 +7,6 @@ from collections import deque
 from collections import namedtuple
 from typing import Tuple
 
-import gym
-import numpy as np
 from torch.utils.data.dataset import IterableDataset
 import torch.multiprocessing as mp
 import torch
@@ -123,23 +121,20 @@ class RLDataset(IterableDataset):
 
     Attributes:
         agent (Agent): Agent that interacts with env
-        env (gym.Env): OpenAI gym environment
         net (nn.Module): Policy network
         replay_buffer: Replay buffer
     """
 
-    def __init__(self, replay_buffer: RolloutCollector, env: gym.Env, net: MLP,
+    def __init__(self, replay_buffer: RolloutCollector, net: MLP,
                  agent, episodes_per_batch: int = 1) -> None:
         """Summary
 
         Args:
             replay_buffer (RolloutCollector): Description
-            env (gym.Env): OpenAI gym environment
             net (nn.Module): Policy network
             agent (Agent): Agent that interacts with env
         """
         self.replay_buffer = replay_buffer
-        self.env = env
         self.net = net
         self.agent = agent
         self.episodes_per_batch = episodes_per_batch
@@ -161,7 +156,9 @@ class RLDataset(IterableDataset):
             Tuple: Sampled experience
         """
         for i in range(self.episodes_per_batch):
-            self.populate()
-            states, actions, rewards, dones, new_states = self.replay_buffer.sample(
-            )
-            yield (states, actions, rewards, dones, new_states)
+            for j in range(len(self.agent.envs)):
+                self.agent.env_idx = j
+                self.populate()
+                states, actions, rewards, dones, new_states = self.replay_buffer.sample(
+                )
+                yield (states, actions, rewards, dones, new_states)

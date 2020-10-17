@@ -42,16 +42,19 @@ class VPG(pl.LightningModule):
         super(VPG, self).__init__()
         self.hparams = hparams
 
-        self.env = gym.make(self.hparams.env)
+        self.num_envs = hparams.num_envs
+        self.env = [gym.make(self.hparams.env) for i in range(self.num_envs)]
         self.gamma = self.hparams.gamma
         self.eps = self.hparams.eps
         self.episodes_per_batch = self.hparams.episodes_per_batch
         self.num_workers = hparams.num_workers
-        obs_size = self.env.observation_space.shape[0]
-        n_actions = self.env.action_space.n
+        # Assuming all envs used have the same obs and action space, the first one is used to extract this info
+        obs_size = self.env[0].observation_space.shape[0]
+        action_size = self.env[0].action_space.shape
+        n_actions = self.env[0].action_space.n
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
-        self.replay_buffer = RolloutCollector(self.hparams.episode_length, self.env.observation_space.shape, self.env.action_space.shape)
+        self.replay_buffer = RolloutCollector(self.hparams.episode_length, (obs_size,), action_size)
 
         self.agent = Agent(self.env, self.replay_buffer)
 
@@ -91,6 +94,11 @@ class VPG(pl.LightningModule):
                             type=int,
                             default=1,
                             help="number of episodes to be sampled per training step")
+        parser.add_argument("--num_envs",
+                            type=int,
+                            default=1,
+                            help="number of environments to be sequentially sampled from")
+
         return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
@@ -213,7 +221,7 @@ class VPG(pl.LightningModule):
         Returns:
             DataLoader: Handles loading the data for training
         """
-        dataset = RLDataset(self.replay_buffer, self.env, self.net, self.agent, self.episodes_per_batch)
+        dataset = RLDataset(self.replay_buffer, self.net, self.agent, self.episodes_per_batch)
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=self.collate_fn,
