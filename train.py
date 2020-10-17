@@ -76,7 +76,9 @@ group_alg = squiRL.reg_algorithms[args.algorithm].add_model_specific_args(
 parser = pl.Trainer.add_argparse_args(parser)
 
 # this is done to add all args to help
-parser = argparse.ArgumentParser(parents=[parser])
+parser = argparse.ArgumentParser(
+    parents=[parser],
+    epilog="Trainer args docs can be found at PyTorch Lightning.")
 
 args = parser.parse_args()
 args, _ = parser.parse_known_args()
