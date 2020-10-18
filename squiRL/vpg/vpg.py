@@ -151,7 +151,7 @@ class VPG(pl.LightningModule):
         """
         _, _, rewards, dones, _ = batch
         if self.hparams.episodes_per_batch > 1:
-            ind = torch.nonzero(dones).squeeze() + 1
+            ind = torch.nonzero(dones, as_tuple=False).squeeze() + 1
             ind = ind.numpy().tolist()
             ind = [ind[0]] + [i - j for j, i in zip(ind, ind[1:])]
             episodes = [torch.split(i, ind) for i in batch]
