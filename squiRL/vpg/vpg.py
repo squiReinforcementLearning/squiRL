@@ -120,10 +120,9 @@ class VPG(pl.LightningModule):
         Returns:
             torch.Tensor: Calculated loss
         """
-        action_logit, actions, rewards = batch
+        action_logits, actions, rewards = batch
 
-        # action_logit = self.net(states.float())
-        log_probs = F.log_softmax(action_logit,
+        log_probs = F.log_softmax(action_logits,
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
@@ -150,24 +149,16 @@ class VPG(pl.LightningModule):
             nb_batch (TYPE): Current index of mini batch of replay data
         """
         states, actions, rewards, dones, _ = batch
-        if self.hparams.episodes_per_batch > 1:
-            states = torch.cat(states)
-            ind = [len(s) for s in dones]
-            action_logits = self.net(states.float())
-            action_logits = torch.split(action_logits, ind)
-            episode_rewards = []
-            loss = 0
-            for ep in range(self.hparams.episodes_per_batch):
-                episode_rewards.append(rewards[ep].sum().detach())
-                loss += self.vpg_loss(
-                    (action_logits[ep], actions[ep], rewards[ep]))
-            mean_episode_reward = torch.tensor(np.mean(episode_rewards))
-
-            if self.trainer.use_dp or self.trainer.use_ddp2:
-                loss = loss.unsqueeze(0)
-        else:
-            mean_episode_reward = rewards.sum().detach()
-            loss = self.vpg_loss(batch)
+        states = torch.cat(states)
+        ind = [len(s) for s in dones]
+        action_logits = torch.split(self.net(states.float()), ind)
+        episode_rewards = []
+        loss = 0
+        for ep in range(self.hparams.episodes_per_batch):
+            episode_rewards.append(rewards[ep].sum().item())
+            loss += self.vpg_loss(
+                (action_logits[ep], actions[ep], rewards[ep]))
+        mean_episode_reward = torch.tensor(np.mean(episode_rewards))
 
         result = pl.TrainResult(loss)
         result.log('loss',
