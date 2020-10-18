@@ -2,8 +2,10 @@
 """
 import argparse
 from argparse import ArgumentParser
+from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List
+
 import gym
 import numpy as np
 import pytorch_lightning as pl
@@ -13,11 +15,10 @@ import torch.optim as optim
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.data._utils import collate
-from collections import OrderedDict
 
 from squiRL.common import reg_policies
-from squiRL.common.data_stream import RLDataset, RolloutCollector
 from squiRL.common.agents import Agent
+from squiRL.common.data_stream import RLDataset, RolloutCollector
 
 
 class VPG(pl.LightningModule):
@@ -41,16 +42,24 @@ class VPG(pl.LightningModule):
         super(VPG, self).__init__()
         self.hparams = hparams
 
-        self.env = gym.make(self.hparams.env)
+        self.num_envs = hparams.num_envs
+        self.env = [gym.make(self.hparams.env) for i in range(self.num_envs)]
         self.gamma = self.hparams.gamma
         self.eps = self.hparams.eps
-        obs_size = self.env.observation_space.shape[0]
-        n_actions = self.env.action_space.n
+        self.episodes_per_batch = self.hparams.episodes_per_batch
+        self.num_workers = hparams.num_workers
+        # Assuming all envs used have the same obs and action space, the first one is used to extract this info
+        obs_size = self.env[0].observation_space.shape[0]
+        action_size = self.env[0].action_space.shape
+        n_actions = self.env[0].action_space.n
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
-        self.replay_buffer = RolloutCollector(self.hparams.episode_length)
+        self.replay_buffer = RolloutCollector(self.hparams.episode_length, (obs_size,), action_size)
 
         self.agent = Agent(self.env, self.replay_buffer)
+
+        if hparams.profiler is not None:
+            self.profiler = hparams.profiler
 
     @staticmethod
     def add_model_specific_args(
@@ -83,6 +92,15 @@ class VPG(pl.LightningModule):
                             type=int,
                             default=20,
                             help="num of dataloader cpu workers")
+        parser.add_argument("--episodes_per_batch",
+                            type=int,
+                            default=1,
+                            help="number of episodes to be sampled per training step")
+        parser.add_argument("--num_envs",
+                            type=int,
+                            default=1,
+                            help="number of environments to be sequentially sampled from")
+
         return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
@@ -103,8 +121,8 @@ class VPG(pl.LightningModule):
             res.append(copy(sum_r))
         return list(reversed(res))
 
-    def vpg_loss(self, batch: Tuple[torch.Tensor,
-                                    torch.Tensor]) -> torch.Tensor:
+    def vpg_loss(self,
+                 batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
         Calculates the loss based on the REINFORCE objective, using the
         discounted
@@ -121,20 +139,22 @@ class VPG(pl.LightningModule):
 
         action_logit = self.net(states.float())
         log_probs = F.log_softmax(action_logit,
-                                  dim=-1).squeeze(0)[range(len(actions)),
-                                                     actions]
+                                  dim=-1)[range(len(actions)),
+                                                     actions.long()]
+
+
 
         discounted_rewards = self.reward_to_go(rewards)
         discounted_rewards = torch.tensor(discounted_rewards)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
-            discounted_rewards.std() + self.eps)
+                discounted_rewards.std() + self.eps)
         advantage = advantage.type_as(log_probs)
 
         loss = -advantage * log_probs
         return loss.sum()
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor],
-                      nb_batch) -> OrderedDict:
+    def training_step(self, batch: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
+                      nb_batch) -> pl.TrainResult:
         """
         Carries out an entire episode in env and calculates loss
 
@@ -142,18 +162,25 @@ class VPG(pl.LightningModule):
             OrderedDict: Training step result
 
         Args:
-            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of
-            replay data
+            batch (List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]): Current
+            mini batch of replay data
             nb_batch (TYPE): Current index of mini batch of replay data
         """
-        _, _, rewards, _, _ = batch
-        episode_reward = rewards.sum().detach()
+        loss = None
+        episode_rewards = []
+        for episode in batch:
+            _, _, rewards, _, _ = episode
+            episode_rewards.append(rewards.sum().detach())
 
-        loss = self.vpg_loss(batch)
+            if loss is None:
+                loss = self.vpg_loss(episode)
+            else:
+                loss += self.vpg_loss(episode)
 
         if self.trainer.use_dp or self.trainer.use_ddp2:
             loss = loss.unsqueeze(0)
 
+        mean_episode_reward = torch.tensor(np.mean(episode_rewards))
         result = pl.TrainResult(loss)
         result.log('loss',
                    loss,
@@ -161,8 +188,8 @@ class VPG(pl.LightningModule):
                    on_epoch=True,
                    prog_bar=False,
                    logger=True)
-        result.log('episode_reward',
-                   episode_reward,
+        result.log('mean_episode_reward',
+                   mean_episode_reward,
                    on_step=True,
                    on_epoch=True,
                    prog_bar=True,
@@ -190,13 +217,7 @@ class VPG(pl.LightningModule):
         """
         batch = collate.default_convert(batch)
 
-        states = torch.cat([s[0] for s in batch])
-        actions = torch.cat([s[1] for s in batch])
-        rewards = torch.cat([s[2] for s in batch])
-        dones = torch.cat([s[3] for s in batch])
-        next_states = torch.cat([s[4] for s in batch])
-
-        return states, actions, rewards, dones, next_states
+        return batch
 
     def __dataloader(self) -> DataLoader:
         """Initialize the RL dataset used for retrieving experiences
@@ -204,11 +225,13 @@ class VPG(pl.LightningModule):
         Returns:
             DataLoader: Handles loading the data for training
         """
-        dataset = RLDataset(self.replay_buffer, self.env, self.net, self.agent)
+        dataset = RLDataset(self.replay_buffer, self.net, self.agent, self.episodes_per_batch)
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=self.collate_fn,
-            batch_size=1,
+            batch_size=self.episodes_per_batch,
+            num_workers=self.num_workers,
+            pin_memory=True
         )
         return dataloader
 
