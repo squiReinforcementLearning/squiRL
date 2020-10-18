@@ -168,9 +168,10 @@ class VPG(pl.LightningModule):
             nb_batch (TYPE): Current index of mini batch of replay data
         """
         loss = None
+        episode_rewards = []
         for episode in batch:
             _, _, rewards, _, _ = episode
-            episode_reward = rewards.sum().detach()
+            episode_rewards.append(rewards.sum().detach())
 
             if loss is None:
                 loss = self.vpg_loss(episode)
@@ -180,6 +181,7 @@ class VPG(pl.LightningModule):
         if self.trainer.use_dp or self.trainer.use_ddp2:
             loss = loss.unsqueeze(0)
 
+        mean_episode_reward = torch.tensor(np.mean(episode_rewards))
         result = pl.TrainResult(loss)
         result.log('loss',
                    loss,
@@ -187,8 +189,8 @@ class VPG(pl.LightningModule):
                    on_epoch=True,
                    prog_bar=False,
                    logger=True)
-        result.log('episode_reward',
-                   episode_reward,
+        result.log('mean_episode_reward',
+                   mean_episode_reward,
                    on_step=True,
                    on_epoch=True,
                    prog_bar=True,
