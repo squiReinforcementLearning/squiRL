@@ -120,9 +120,9 @@ class VPG(pl.LightningModule):
         Returns:
             torch.Tensor: Calculated loss
         """
-        states, actions, rewards, dones, next_states = batch
+        action_logit, actions, rewards = batch
 
-        action_logit = self.net(states.float())
+        # action_logit = self.net(states.float())
         log_probs = F.log_softmax(action_logit,
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
@@ -149,18 +149,18 @@ class VPG(pl.LightningModule):
             replay data
             nb_batch (TYPE): Current index of mini batch of replay data
         """
-        _, _, rewards, dones, _ = batch
+        states, actions, rewards, dones, _ = batch
         if self.hparams.episodes_per_batch > 1:
-            ind = torch.nonzero(dones, as_tuple=False).squeeze() + 1
-            ind = ind.numpy().tolist()
-            ind = [ind[0]] + [i - j for j, i in zip(ind, ind[1:])]
-            episodes = [torch.split(i, ind) for i in batch]
-            states, actions, rewards, dones, next_states = episodes
+            states = torch.cat(states)
+            ind = [len(s) for s in dones]
+            action_logits = self.net(states.float())
+            action_logits = torch.split(action_logits, ind)
             episode_rewards = []
             loss = 0
             for ep in range(self.hparams.episodes_per_batch):
                 episode_rewards.append(rewards[ep].sum().detach())
-                loss += self.vpg_loss(episode[ep] for episode in episodes)
+                loss += self.vpg_loss(
+                    (action_logits[ep], actions[ep], rewards[ep]))
             mean_episode_reward = torch.tensor(np.mean(episode_rewards))
 
             if self.trainer.use_dp or self.trainer.use_ddp2:
@@ -203,13 +203,11 @@ class VPG(pl.LightningModule):
         Returns:
             TYPE: Processed mini batch of replay data
         """
-        batch = collate.default_convert(batch)
-
-        states = torch.cat([s[0] for s in batch])
-        actions = torch.cat([s[1] for s in batch])
-        rewards = torch.cat([s[2] for s in batch])
-        dones = torch.cat([s[3] for s in batch])
-        next_states = torch.cat([s[4] for s in batch])
+        states = collate.default_convert([s[0] for s in batch])
+        actions = collate.default_convert([s[1] for s in batch])
+        rewards = collate.default_convert([s[2] for s in batch])
+        dones = collate.default_convert([s[3] for s in batch])
+        next_states = collate.default_convert([s[4] for s in batch])
 
         return states, actions, rewards, dones, next_states
 
