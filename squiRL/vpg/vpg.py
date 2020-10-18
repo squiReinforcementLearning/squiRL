@@ -1,7 +1,6 @@
 """Script for training workflow of the Vanilla Policy Gradient Algorithm.
 """
 import argparse
-from argparse import ArgumentParser
 from copy import copy
 from typing import Tuple, List
 import gym
@@ -83,6 +82,10 @@ class VPG(pl.LightningModule):
                             type=int,
                             default=20,
                             help="num of dataloader cpu workers")
+        parser.add_argument("--episodes_per_batch",
+                            type=int,
+                            default=1,
+                            help="num of episodes per batch")
         return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
@@ -146,13 +149,25 @@ class VPG(pl.LightningModule):
             replay data
             nb_batch (TYPE): Current index of mini batch of replay data
         """
-        _, _, rewards, _, _ = batch
-        episode_reward = rewards.sum().detach()
+        _, _, rewards, dones, _ = batch
+        if self.hparams.episodes_per_batch > 1:
+            ind = torch.nonzero(dones).squeeze() + 1
+            ind = ind.numpy().tolist()
+            ind = [ind[0]] + [i - j for j, i in zip(ind, ind[1:])]
+            episodes = [torch.split(i, ind) for i in batch]
+            states, actions, rewards, dones, next_states = episodes
+            episode_rewards = []
+            loss = 0
+            for ep in range(self.hparams.episodes_per_batch):
+                episode_rewards.append(rewards[ep].sum().detach())
+                loss += self.vpg_loss(episode[ep] for episode in episodes)
+            mean_episode_reward = torch.tensor(np.mean(episode_rewards))
 
-        loss = self.vpg_loss(batch)
-
-        if self.trainer.use_dp or self.trainer.use_ddp2:
-            loss = loss.unsqueeze(0)
+            if self.trainer.use_dp or self.trainer.use_ddp2:
+                loss = loss.unsqueeze(0)
+        else:
+            mean_episode_reward = rewards.sum().detach()
+            loss = self.vpg_loss(batch)
 
         result = pl.TrainResult(loss)
         result.log('loss',
@@ -161,8 +176,8 @@ class VPG(pl.LightningModule):
                    on_epoch=True,
                    prog_bar=False,
                    logger=True)
-        result.log('episode_reward',
-                   episode_reward,
+        result.log('mean_episode_reward',
+                   mean_episode_reward,
                    on_step=True,
                    on_epoch=True,
                    prog_bar=True,
@@ -204,11 +219,13 @@ class VPG(pl.LightningModule):
         Returns:
             DataLoader: Handles loading the data for training
         """
-        dataset = RLDataset(self.replay_buffer, self.env, self.net, self.agent)
+        dataset = RLDataset(self.replay_buffer,
+                            self.hparams.episodes_per_batch, self.net,
+                            self.agent)
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=self.collate_fn,
-            batch_size=1,
+            batch_size=self.hparams.episodes_per_batch,
         )
         return dataloader
 
