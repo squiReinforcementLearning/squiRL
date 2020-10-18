@@ -58,6 +58,9 @@ class VPG(pl.LightningModule):
 
         self.agent = Agent(self.env, self.replay_buffer)
 
+        if hparams.profiler is not None:
+            self.profiler = hparams.profiler
+
     @staticmethod
     def add_model_specific_args(
             parent_parser: argparse.ArgumentParser) -> argparse.ArgumentParser:

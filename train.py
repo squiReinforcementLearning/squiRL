@@ -10,6 +10,7 @@ import argparse
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.seed import seed_everything
 import pytorch_lightning as pl
+from pytorch_lightning.profiler import SimpleProfiler
 import squiRL
 
 
@@ -21,7 +22,7 @@ def main(hparams) -> None:
     """
     if hparams.debug:
         hparams.logger = None
-        hparams.profiler = True
+        hparams.profiler = SimpleProfiler()
         hparams.num_workers = 0
     else:
         hparams.logger = WandbLogger(project=hparams.project)
