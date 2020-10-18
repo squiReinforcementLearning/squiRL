@@ -1,0 +1,21 @@
+program:
+        ../../train.py
+method: bayes
+metric:
+        name: epoch_episode_reward
+        goal: maximize
+command:
+        - ${env}
+        - python
+        - ${program}
+        - "--gpus"
+        - 1
+        - "--distributed_backend"
+        - "dp"
+        - ${args}
+parameters:
+        lr:
+                min: 0.0000001
+                max: 0.001
+        optimizer:
+                values: ["Adam", "SGD"]

@@ -1,7 +1,6 @@
 """Script for training workflow of the Vanilla Policy Gradient Algorithm.
 """
 import argparse
-from argparse import ArgumentParser
 from copy import copy
 from typing import Tuple, List
 import gym
@@ -83,6 +82,10 @@ class VPG(pl.LightningModule):
                             type=int,
                             default=20,
                             help="num of dataloader cpu workers")
+        parser.add_argument("--optimizer",
+                            type=str,
+                            default="Adam",
+                            help="network optimizer")
         return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
@@ -154,21 +157,43 @@ class VPG(pl.LightningModule):
         if self.trainer.use_dp or self.trainer.use_ddp2:
             loss = loss.unsqueeze(0)
 
-        result = pl.TrainResult(loss)
-        result.log('loss',
-                   loss,
-                   on_step=True,
-                   on_epoch=True,
-                   prog_bar=False,
-                   logger=True)
-        result.log('episode_reward',
-                   episode_reward,
-                   on_step=True,
-                   on_epoch=True,
-                   prog_bar=True,
-                   logger=True)
+        self.result = pl.TrainResult(loss)
+        self.result.log('loss',
+                        loss,
+                        on_step=True,
+                        on_epoch=True,
+                        prog_bar=False,
+                        logger=True)
+        self.result.log('episode_reward',
+                        episode_reward,
+                        on_step=True,
+                        on_epoch=True,
+                        prog_bar=True,
+                        logger=True)
 
-        return result
+        return self.result
+
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor],
+                  nb_batch) -> OrderedDict:
+        """
+        Carries out an entire episode in env and calculates loss
+Returns:
+            OrderedDict: Training step result
+
+        Args:
+            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of
+            replay data
+            nb_batch (TYPE): Current index of mini batch of replay data
+        """
+        _, _, rewards, _, _ = batch
+        episode_reward = rewards.sum().detach()
+
+        loss = self.vpg_loss(batch)
+
+        if self.trainer.use_dp or self.trainer.use_ddp2:
+            loss = loss.unsqueeze(0)
+
+        return {'loss': loss, 'episode_reward': episode_reward}
 
     def configure_optimizers(self) -> List[Optimizer]:
         """Initialize Adam optimizer
@@ -176,7 +201,9 @@ class VPG(pl.LightningModule):
         Returns:
             List[Optimizer]: List of used optimizers
         """
-        optimizer = optim.Adam(self.net.parameters(), lr=self.hparams.lr)
+        optimizer = getattr(optim,
+                            self.hparams.optimizer)(self.net.parameters(),
+                                                    lr=self.hparams.lr)
         return [optimizer]
 
     def collate_fn(self, batch):
@@ -212,6 +239,20 @@ class VPG(pl.LightningModule):
         )
         return dataloader
 
+    def __test_dataloader(self) -> DataLoader:
+        """Initialize the RL dataset used for retrieving experiences
+
+        Returns:
+            DataLoader: Handles loading the data for training
+        """
+        dataset = RLDataset(self.replay_buffer, self.env, self.net, self.agent)
+        dataloader = DataLoader(
+            dataset=dataset,
+            collate_fn=self.collate_fn,
+            batch_size=1,
+        )
+        return dataloader
+
     def train_dataloader(self) -> DataLoader:
         """Get train data loader
 
@@ -219,3 +260,11 @@ class VPG(pl.LightningModule):
             DataLoader: Handles loading the data for training
         """
         return self.__dataloader()
+
+    def test_dataloader(self) -> DataLoader:
+        """Get train data loader
+
+        Returns:
+        DataLoader: Handles loading the data for training
+        """
+        return self.__test_dataloader()
