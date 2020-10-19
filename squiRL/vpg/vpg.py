@@ -1,7 +1,6 @@
 """Script for training workflow of the Vanilla Policy Gradient Algorithm.
 """
 import argparse
-from argparse import ArgumentParser
 from copy import copy
 from typing import Tuple, List
 import gym
@@ -83,6 +82,10 @@ class VPG(pl.LightningModule):
                             type=int,
                             default=20,
                             help="num of dataloader cpu workers")
+        parser.add_argument("--episodes_per_batch",
+                            type=int,
+                            default=1,
+                            help="num of episodes per batch")
         return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
@@ -117,10 +120,9 @@ class VPG(pl.LightningModule):
         Returns:
             torch.Tensor: Calculated loss
         """
-        states, actions, rewards, dones, next_states = batch
+        action_logits, actions, rewards = batch
 
-        action_logit = self.net(states.float())
-        log_probs = F.log_softmax(action_logit,
+        log_probs = F.log_softmax(action_logits,
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
@@ -146,13 +148,17 @@ class VPG(pl.LightningModule):
             replay data
             nb_batch (TYPE): Current index of mini batch of replay data
         """
-        _, _, rewards, _, _ = batch
-        episode_reward = rewards.sum().detach()
-
-        loss = self.vpg_loss(batch)
-
-        if self.trainer.use_dp or self.trainer.use_ddp2:
-            loss = loss.unsqueeze(0)
+        states, actions, rewards, dones, _ = batch
+        states = torch.cat(states)
+        ind = [len(s) for s in dones]
+        action_logits = torch.split(self.net(states.float()), ind)
+        episode_rewards = []
+        loss = 0
+        for ep in range(self.hparams.episodes_per_batch):
+            episode_rewards.append(rewards[ep].sum().item())
+            loss += self.vpg_loss(
+                (action_logits[ep], actions[ep], rewards[ep]))
+        mean_episode_reward = torch.tensor(np.mean(episode_rewards))
 
         result = pl.TrainResult(loss)
         result.log('loss',
@@ -161,8 +167,8 @@ class VPG(pl.LightningModule):
                    on_epoch=True,
                    prog_bar=False,
                    logger=True)
-        result.log('episode_reward',
-                   episode_reward,
+        result.log('mean_episode_reward',
+                   mean_episode_reward,
                    on_step=True,
                    on_epoch=True,
                    prog_bar=True,
@@ -188,13 +194,11 @@ class VPG(pl.LightningModule):
         Returns:
             TYPE: Processed mini batch of replay data
         """
-        batch = collate.default_convert(batch)
-
-        states = torch.cat([s[0] for s in batch])
-        actions = torch.cat([s[1] for s in batch])
-        rewards = torch.cat([s[2] for s in batch])
-        dones = torch.cat([s[3] for s in batch])
-        next_states = torch.cat([s[4] for s in batch])
+        states = collate.default_convert([s[0] for s in batch])
+        actions = collate.default_convert([s[1] for s in batch])
+        rewards = collate.default_convert([s[2] for s in batch])
+        dones = collate.default_convert([s[3] for s in batch])
+        next_states = collate.default_convert([s[4] for s in batch])
 
         return states, actions, rewards, dones, next_states
 
@@ -204,11 +208,13 @@ class VPG(pl.LightningModule):
         Returns:
             DataLoader: Handles loading the data for training
         """
-        dataset = RLDataset(self.replay_buffer, self.env, self.net, self.agent)
+        dataset = RLDataset(self.replay_buffer,
+                            self.hparams.episodes_per_batch, self.net,
+                            self.agent)
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=self.collate_fn,
-            batch_size=1,
+            batch_size=self.hparams.episodes_per_batch,
         )
         return dataloader
 

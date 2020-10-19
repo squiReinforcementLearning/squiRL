@@ -12,7 +12,7 @@ import gym
 from typing import Tuple
 
 Experience = namedtuple('Experience',
-                        ('state', 'action', 'reward', 'done', 'last_state'))
+                        ('state', 'action', 'reward', 'done', 'next_state'))
 
 
 class RolloutCollector:
@@ -88,8 +88,8 @@ class RLDataset(IterableDataset):
         net (nn.Module): Policy network
         replay_buffer: Replay buffer
     """
-    def __init__(self, replay_buffer: RolloutCollector, env: gym.Env, net: MLP,
-                 agent) -> None:
+    def __init__(self, replay_buffer: RolloutCollector,
+                 episodes_per_batch: int, net: MLP, agent) -> None:
         """Summary
 
         Args:
@@ -99,7 +99,7 @@ class RLDataset(IterableDataset):
             agent (Agent): Agent that interacts with env
         """
         self.replay_buffer = replay_buffer
-        self.env = env
+        self.episodes_per_batch = episodes_per_batch
         self.net = net
         self.agent = agent
 
@@ -108,7 +108,6 @@ class RLDataset(IterableDataset):
         Samples an entire episode
 
         """
-        self.replay_buffer.empty_buffer()
         done = False
         while not done:
             reward, done = self.agent.play_step(self.net)
@@ -119,8 +118,9 @@ class RLDataset(IterableDataset):
         Yields:
             Tuple: Sampled experience
         """
-        for i in range(1):
+        for i in range(self.episodes_per_batch):
             self.populate()
             states, actions, rewards, dones, new_states = self.replay_buffer.sample(
-            )
+        )
             yield (states, actions, rewards, dones, new_states)
+            self.replay_buffer.empty_buffer()
