@@ -22,7 +22,7 @@ def main(hparams) -> None:
     if hparams.debug:
         hparams.logger = None
         hparams.profiler = True
-        hparams.num_workers = None
+        hparams.num_workers = 0
     else:
         hparams.logger = WandbLogger(project=hparams.project)
     seed_everything(hparams.seed)
