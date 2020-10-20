@@ -8,11 +8,10 @@ from torch.utils.data.dataset import IterableDataset
 from collections import deque
 from collections import namedtuple
 from squiRL.common.policies import MLP
-import gym
 from typing import Tuple
 
 Experience = namedtuple('Experience',
-                        ('state', 'action', 'reward', 'done', 'next_state'))
+                        ('state', 'action', 'reward', 'first', 'next_state'))
 
 
 class RolloutCollector:
@@ -49,7 +48,7 @@ class RolloutCollector:
         Add experience to the buffer
 
         Args:
-            experience (Experience): Tuple (state, action, reward, done,
+            experience (Experience): Tuple (state, action, reward, first,
             new_state)
         """
         self.replay_buffer.append(experience)
@@ -60,12 +59,12 @@ class RolloutCollector:
         Returns:
             Tuple: Sampled experience
         """
-        states, actions, rewards, dones, next_states = zip(
+        states, actions, rewards, firsts, next_states = zip(
             *[self.replay_buffer[i] for i in range(len(self.replay_buffer))])
 
         return (np.array(states), np.array(actions),
                 np.array(rewards, dtype=np.float32),
-                np.array(dones, dtype=np.bool), np.array(next_states))
+                np.array(firsts, dtype=np.bool), np.array(next_states))
 
     def empty_buffer(self) -> None:
         """Empty replay buffer
@@ -84,7 +83,7 @@ class RLDataset(IterableDataset):
 
     Attributes:
         agent (Agent): Agent that interacts with env
-        env (gym.Env): OpenAI gym environment
+        episodes_per_batch (int): number of episodes per batch
         net (nn.Module): Policy network
         replay_buffer: Replay buffer
     """
@@ -94,7 +93,7 @@ class RLDataset(IterableDataset):
 
         Args:
             replay_buffer (RolloutCollector): Description
-            env (gym.Env): OpenAI gym environment
+            episodes_per_batch (int): number of episodes per batch
             net (nn.Module): Policy network
             agent (Agent): Agent that interacts with env
         """
@@ -108,9 +107,9 @@ class RLDataset(IterableDataset):
         Samples an entire episode
 
         """
-        done = False
-        while not done:
-            reward, done = self.agent.play_step(self.net)
+        first = False
+        while not first:
+            reward, first = self.agent.play_step(self.net)
 
     def __iter__(self):
         """Iterates over sampled batch
@@ -120,7 +119,7 @@ class RLDataset(IterableDataset):
         """
         for i in range(self.episodes_per_batch):
             self.populate()
-            states, actions, rewards, dones, new_states = self.replay_buffer.sample(
-        )
-            yield (states, actions, rewards, dones, new_states)
+            states, actions, rewards, firsts, new_states = self.replay_buffer.sample(
+            )
+            yield (states, actions, rewards, firsts, new_states)
             self.replay_buffer.empty_buffer()

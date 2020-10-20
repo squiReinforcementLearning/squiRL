@@ -3,7 +3,7 @@
 import argparse
 from copy import copy
 from typing import Tuple, List
-import gym
+import gym3
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -24,7 +24,7 @@ class VPG(pl.LightningModule):
 
     Attributes:
         agent (Agent): Agent that interacts with env
-        env (gym.Env): OpenAI gym environment
+        env (gym3.Env): OpenAI gym environment
         eps (float): Small offset used in calculating loss
         gamma (float): Discount rate
         hparams (argeparse.Namespace): Stores all passed args
@@ -40,11 +40,12 @@ class VPG(pl.LightningModule):
         super(VPG, self).__init__()
         self.hparams = hparams
 
-        self.env = gym.make(self.hparams.env)
+        self.env = gym3.vectorize_gym(num=1,
+                                      env_kwargs={"id": self.hparams.env})
         self.gamma = self.hparams.gamma
         self.eps = self.hparams.eps
-        obs_size = self.env.observation_space.shape[0]
-        n_actions = self.env.action_space.n
+        obs_size = self.env.ob_space.size
+        n_actions = self.env.ac_space.size
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
@@ -149,7 +150,7 @@ class VPG(pl.LightningModule):
             nb_batch (TYPE): Current index of mini batch of replay data
         """
         states, actions, rewards, dones, _ = batch
-        states = torch.cat(states)
+        states = torch.cat(states).squeeze()
         ind = [len(s) for s in dones]
         action_logits = torch.split(self.net(states.float()), ind)
         episode_rewards = []

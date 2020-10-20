@@ -1,7 +1,7 @@
 """Base agent class which handles interacting with the environment for
 generating experience
 """
-import gym
+import gym3
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,25 +17,19 @@ class Agent:
         env: training environment
 
     Attributes:
-        env (gym.Env): OpenAI gym training environment
+        env (gym3.Env): OpenAI gym training environment
         obs (int): Array of env observation state
         replay_buffer (TYPE): Data collector for saving experience
     """
-    def __init__(self, env: gym.Env, replay_buffer) -> None:
+    def __init__(self, env: gym3.Env, replay_buffer) -> None:
         """Initializes agent class
 
         Args:
-            env (gym.Env): OpenAI gym training environment
+            env (gym3.Env): OpenAI gym training environment
             replay_buffer (TYPE): Data collector for saving experience
         """
         self.env = env
         self.replay_buffer = replay_buffer
-        self.reset()
-
-    def reset(self) -> None:
-        """Resets the environment and updates the obs
-        """
-        self.obs = self.env.reset()
 
     def process_obs(self, obs: int) -> torch.Tensor:
         """Converts obs np.array to torch.Tensor for passing through NN
@@ -61,6 +55,7 @@ class Agent:
         Returns:
             action (int): Action to be carried out
         """
+        reward, self.obs, first = self.env.observe()
         obs = self.process_obs(self.obs)
 
         action_logit = net(obs)
@@ -89,11 +84,10 @@ class Agent:
         action = self.get_action(net)
 
         # do step in the environment
-        new_obs, reward, done, _ = self.env.step(action)
-        exp = Experience(self.obs, action, reward, done, new_obs)
+        self.env.act([action])
+        reward, new_obs, first = self.env.observe()
+        exp = Experience(self.obs, action, reward, first, new_obs)
         self.replay_buffer.append(exp)
 
         self.obs = new_obs
-        if done:
-            self.reset()
-        return reward, done
+        return reward, first
