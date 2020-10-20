@@ -195,11 +195,11 @@ class VPG(pl.LightningModule):
         Returns:
             TYPE: Processed mini batch of replay data
         """
-        states = collate.default_convert([s[0] for s in batch])
-        actions = collate.default_convert([s[1] for s in batch])
-        rewards = collate.default_convert([s[2] for s in batch])
-        dones = collate.default_convert([s[3] for s in batch])
-        next_states = collate.default_convert([s[4] for s in batch])
+        states = collate.default_convert([s[0].squeeze() for s in batch])
+        actions = collate.default_convert([s[1].squeeze() for s in batch])
+        rewards = collate.default_convert([s[2].squeeze() for s in batch])
+        dones = collate.default_convert([s[3].squeeze() for s in batch])
+        next_states = collate.default_convert([s[4].squeeze() for s in batch])
 
         return states, actions, rewards, dones, next_states
 
