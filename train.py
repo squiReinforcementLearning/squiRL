@@ -11,6 +11,7 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.seed import seed_everything
 import pytorch_lightning as pl
 import squiRL
+from pytorch_lightning.profiler import AdvancedProfiler
 
 
 def train(hparams) -> None:
@@ -21,12 +22,13 @@ def train(hparams) -> None:
     """
     if hparams.debug:
         hparams.logger = None
-        hparams.profiler = True
+        # hparams.profiler = AdvancedProfiler()
     else:
         hparams.logger = WandbLogger(project=hparams.project)
     seed_everything(hparams.seed)
     algorithm = squiRL.reg_algorithms[hparams.algorithm](hparams)
-    trainer = pl.Trainer.from_argparse_args(hparams)
+    trainer = pl.Trainer.from_argparse_args(hparams,
+                                            profiler=AdvancedProfiler())
     trainer.fit(algorithm)
 
 

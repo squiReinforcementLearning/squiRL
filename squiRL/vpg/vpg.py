@@ -161,21 +161,21 @@ class VPG(pl.LightningModule):
                 (action_logits[ep], actions[ep], rewards[ep]))
         mean_episode_reward = torch.tensor(np.mean(episode_rewards))
 
-        result = pl.TrainResult(loss)
-        result.log('loss',
-                   loss,
-                   on_step=True,
-                   on_epoch=True,
-                   prog_bar=False,
-                   logger=True)
-        result.log('mean_episode_reward',
-                   mean_episode_reward,
-                   on_step=True,
-                   on_epoch=True,
-                   prog_bar=True,
-                   logger=True)
+        # result = pl.TrainResult(loss)
+        self.log('loss',
+                 loss,
+                 on_step=True,
+                 on_epoch=True,
+                 prog_bar=False,
+                 logger=True)
+        self.log('mean_episode_reward',
+                 mean_episode_reward,
+                 on_step=True,
+                 on_epoch=True,
+                 prog_bar=True,
+                 logger=True)
 
-        return result
+        return loss
 
     def configure_optimizers(self) -> List[Optimizer]:
         """Initialize Adam optimizer
