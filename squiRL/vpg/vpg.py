@@ -40,12 +40,13 @@ class VPG(pl.LightningModule):
         super(VPG, self).__init__()
         self.hparams = hparams
 
-        self.env = gym3.vectorize_gym(num=1,
+        self.env = gym3.vectorize_gym(num=self.hparams.num_envs,
                                       env_kwargs={"id": self.hparams.env})
         self.gamma = self.hparams.gamma
         self.eps = self.hparams.eps
         obs_size = self.env.ob_space.size
         n_actions = self.env.ac_space.eltype.n
+        self.hparams.batch_size = self.hparams.episodes_per_batch * self.hparams.num_envs
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
@@ -87,6 +88,10 @@ class VPG(pl.LightningModule):
                             type=int,
                             default=1,
                             help="num of episodes per batch")
+        parser.add_argument("--num_envs",
+                            type=int,
+                            default=1,
+                            help="num of parallel envs")
         return parser
 
     def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
@@ -149,13 +154,24 @@ class VPG(pl.LightningModule):
             replay data
             nb_batch (TYPE): Current index of mini batch of replay data
         """
-        states, actions, rewards, dones, _ = batch
-        states = torch.cat(states).squeeze()
-        ind = [len(s) for s in dones]
+        states, actions, rewards, firsts, _ = batch
+        # ind = torch.nonzero(firsts).squeeze().numpy().tolist()
+        # ind = [ind] + [self.hparams.batch_size] if type(
+        # ind) == int else ind + [self.hparams.batch_size]
+        # ind = [ind[0]] + [i - j for j, i in zip(ind, ind[1:])]
+        ind = [
+            self.hparams.episodes_per_batch
+            for i in range(self.hparams.num_envs)
+        ]
+        actions = torch.split(actions, ind)
+        rewards = torch.split(rewards, ind)
+        firsts = torch.split(firsts, ind)
         action_logits = torch.split(self.net(states.float()), ind)
         episode_rewards = []
         loss = 0
-        for ep in range(self.hparams.episodes_per_batch):
+        for ep in range(self.hparams.num_envs):
+            if rewards[ep].shape[0] == 1:
+                continue
             episode_rewards.append(rewards[ep].sum().item())
             loss += self.vpg_loss(
                 (action_logits[ep], actions[ep], rewards[ep]))
@@ -195,13 +211,21 @@ class VPG(pl.LightningModule):
         Returns:
             TYPE: Processed mini batch of replay data
         """
-        states = collate.default_convert([s[0].squeeze() for s in batch])
-        actions = collate.default_convert([s[1].squeeze() for s in batch])
-        rewards = collate.default_convert([s[2].squeeze() for s in batch])
-        dones = collate.default_convert([s[3].squeeze() for s in batch])
-        next_states = collate.default_convert([s[4].squeeze() for s in batch])
+        batch = collate.default_convert(batch)
+        states = [s[0].squeeze() for s in batch][0]
+        actions = [s[1].squeeze() for s in batch][0]
+        rewards = [s[2].squeeze() for s in batch][0]
+        firsts = [s[3].squeeze() for s in batch][0]
+        next_states = [s[4].squeeze() for s in batch][0]
 
-        return states, actions, rewards, dones, next_states
+        dim = states.shape[1]
+        states = torch.cat([states[:, i] for i in range(dim)])
+        actions = torch.cat([actions[:, i] for i in range(dim)])
+        rewards = torch.cat([rewards[:, i] for i in range(dim)])
+        firsts = torch.cat([firsts[:, i] for i in range(dim)])
+        next_states = torch.cat([next_states[:, i] for i in range(dim)])
+
+        return states, actions, rewards, firsts, next_states
 
     def __dataloader(self) -> DataLoader:
         """Initialize the RL dataset used for retrieving experiences

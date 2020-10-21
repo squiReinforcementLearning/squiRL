@@ -98,7 +98,8 @@ class RLDataset(IterableDataset):
             agent (Agent): Agent that interacts with env
         """
         self.replay_buffer = replay_buffer
-        self.episodes_per_batch = episodes_per_batch
+        # self.episodes_per_batch = episodes_per_batch
+        self.steps_per_batch = episodes_per_batch
         self.net = net
         self.agent = agent
 
@@ -107,9 +108,8 @@ class RLDataset(IterableDataset):
         Samples an entire episode
 
         """
-        first = False
-        while not first:
-            reward, first = self.agent.play_step(self.net)
+        for _ in range(self.steps_per_batch):
+            self.agent.play_step(self.net)
 
     def __iter__(self):
         """Iterates over sampled batch
@@ -117,9 +117,8 @@ class RLDataset(IterableDataset):
         Yields:
             Tuple: Sampled experience
         """
-        for i in range(self.episodes_per_batch):
-            self.populate()
-            states, actions, rewards, firsts, new_states = self.replay_buffer.sample(
-            )
-            yield (states, actions, rewards, firsts, new_states)
-            self.replay_buffer.empty_buffer()
+        self.populate()
+        states, actions, rewards, firsts, new_states = self.replay_buffer.sample(
+        )
+        yield (states, actions, rewards, firsts, new_states)
+        self.replay_buffer.empty_buffer()

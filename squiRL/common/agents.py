@@ -30,6 +30,7 @@ class Agent:
         """
         self.env = env
         self.replay_buffer = replay_buffer
+        _, self.obs, _ = self.env.observe()
 
     def process_obs(self, obs: int) -> torch.Tensor:
         """Converts obs np.array to torch.Tensor for passing through NN
@@ -55,14 +56,13 @@ class Agent:
         Returns:
             action (int): Action to be carried out
         """
-        reward, self.obs, first = self.env.observe()
         obs = self.process_obs(self.obs)
 
         action_logit = net(obs)
         probs = F.softmax(action_logit, dim=-1)
         dist = torch.distributions.Categorical(probs)
-        action = dist.sample().item()
-        action = int(action)
+        action = dist.sample().squeeze()
+        action = action.item() if action.ndim == 0 else action.numpy()
         return action
 
     @torch.no_grad()
@@ -82,12 +82,12 @@ class Agent:
             done (bool): Indicates if a step is terminal
         """
         action = self.get_action(net)
+        action = [action] if type(action) == int else action
 
         # do step in the environment
-        self.env.act([action])
+        self.env.act(action)
         reward, new_obs, first = self.env.observe()
         exp = Experience(self.obs, action, reward, first, new_obs)
         self.replay_buffer.append(exp)
 
         self.obs = new_obs
-        return reward, first
