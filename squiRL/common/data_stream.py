@@ -33,7 +33,7 @@ class RolloutCollector:
             capacity (int): Description
         """
         self.capacity = capacity
-        self.replay_buffer = deque(maxlen=self.capacity)
+        self.replay_buffer = deque(maxlen=self.capacity*4)
 
     def __len__(self) -> int:
         """Calculates length of buffer
@@ -85,31 +85,41 @@ class RLDataset(IterableDataset):
         agent (Agent): Agent that interacts with env
         episodes_per_batch (int): number of episodes per batch
         net (nn.Module): Policy network
+        num_envs (int): Number of vectorized envs
         replay_buffer: Replay buffer
     """
     def __init__(self, replay_buffer: RolloutCollector,
-                 episodes_per_batch: int, net: MLP, agent) -> None:
+                 episodes_per_batch: int, net: MLP, agent,
+                 num_envs: int) -> None:
         """Summary
 
         Args:
             replay_buffer (RolloutCollector): Description
             episodes_per_batch (int): number of episodes per batch
             net (nn.Module): Policy network
+            num_envs (int): Number of vectorized envs
             agent (Agent): Agent that interacts with env
         """
         self.replay_buffer = replay_buffer
-        # self.episodes_per_batch = episodes_per_batch
-        self.steps_per_batch = episodes_per_batch
+        self.episodes_per_batch = episodes_per_batch
+        # self.steps_per_batch = episodes_per_batch
         self.net = net
         self.agent = agent
+        self.num_envs = num_envs
 
     def populate(self) -> None:
         """
         Samples an entire episode
 
         """
-        for _ in range(self.steps_per_batch):
-            self.agent.play_step(self.net)
+        self.total_episodes_sampled = -np.ones([self.num_envs])
+        count = 0
+        while self.total_episodes_sampled.sum() < self.episodes_per_batch:
+            count += 1
+            firsts = self.agent.play_step(self.net)
+            self.total_episodes_sampled += firsts
+            # print(firsts, count)
+        # print(self.total_episodes_sampled)
 
     def __iter__(self):
         """Iterates over sampled batch
@@ -120,5 +130,6 @@ class RLDataset(IterableDataset):
         self.populate()
         states, actions, rewards, firsts, new_states = self.replay_buffer.sample(
         )
-        yield (states, actions, rewards, firsts, new_states)
+        yield (states, actions, rewards, firsts, new_states,
+               self.total_episodes_sampled)
         self.replay_buffer.empty_buffer()

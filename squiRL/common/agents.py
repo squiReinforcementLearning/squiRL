@@ -91,3 +91,4 @@ class Agent:
         self.replay_buffer.append(exp)
 
         self.obs = new_obs
+        return first
