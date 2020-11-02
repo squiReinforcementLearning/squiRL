@@ -1,5 +1,5 @@
 # squiRL
-An RL library in PyTorch embedded within the PyTorch Lightning framework. Aiming to provide a comprehensive platform for development and test of RL algorithms. 
+An RL library in PyTorch embedded within the PyTorch Lightning framework. Aiming to provide a comprehensive platform for the development and testing of RL algorithms. 
 
 ## Branch names
 Branches should be using one of these groups to start with:
