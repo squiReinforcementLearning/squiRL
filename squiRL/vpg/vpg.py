@@ -46,7 +46,6 @@ class VPG(pl.LightningModule):
         self.eps = self.hparams.eps
         obs_size = self.env.ob_space.size
         n_actions = self.env.ac_space.eltype.n
-        # self.hparams.batch_size = self.hparams.episodes_per_batch * self.hparams.num_envs
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.replay_buffer = RolloutCollector(self.hparams.episode_length)
