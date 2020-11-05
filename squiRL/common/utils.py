@@ -16,11 +16,10 @@ def collate_episodes(batch):
     """
 
     # extract from batch
-    batch_dict = {}
-    cleaned_batch_dict = defaultdict(list)
-    for i, j in enumerate(Experience._fields):
-        batch_dict[j] = [s[i].squeeze() for s in batch][0]
-        cleaned_batch_dict[j] = []
+    batch_dict = {
+        j: [s[i].squeeze() for s in batch][0]
+        for i, j in enumerate(Experience._fields)
+    }
 
     # remove streams with no full episodes
     counts = [
@@ -33,11 +32,12 @@ def collate_episodes(batch):
         batch_dict = {k: np.delete(v, i, 1) for k, v in batch_dict.items()}
 
     # remove incomplete episodes from remaining streams
+    cleaned_batch_dict = defaultdict(list)
+    cleaned_batch_dict = {i: [] for i in Experience._fields}
     inds = [
         np.nonzero(batch_dict['first'][:, i])
         for i in range(batch_dict['first'].shape[1])
     ]
-
     for j, i in enumerate(inds):
         i = i[0]
         c_all = {
