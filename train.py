@@ -20,11 +20,12 @@ def train(hparams) -> None:
     Args:
         hparams (argparse.Namespace): Stores all passed args
     """
-    if hparams.debug:
+    if hparams.debug is True:
         hparams.logger = None
         profiler = True
     else:
         hparams.logger = WandbLogger(project=hparams.project)
+        profiler = None
     seed_everything(hparams.seed)
     algorithm = squiRL.reg_algorithms[hparams.algorithm](hparams)
     trainer = pl.Trainer.from_argparse_args(hparams, profiler=profiler)

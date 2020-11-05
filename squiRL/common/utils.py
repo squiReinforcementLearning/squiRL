@@ -17,7 +17,7 @@ def collate_episodes(batch):
 
     # extract from batch
     batch_dict = {
-        j: [s[i].squeeze() for s in batch][0]
+        j: [s[i] for s in batch][0]
         for i, j in enumerate(Experience._fields)
     }
 

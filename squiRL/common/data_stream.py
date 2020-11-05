@@ -23,17 +23,14 @@ class RolloutCollector:
         capacity: Size of the buffer
 
     Attributes:
-        capacity (int): Size of the buffer
         replay_buffer (deque): Experience buffer
     """
     def __init__(self, capacity: int) -> None:
-        """Summary
+        """Stores rollout data collected by agents.
 
         Args:
-            capacity (int): Description
         """
-        self.capacity = capacity
-        self.replay_buffer = deque(maxlen=self.capacity*4)
+        self.replay_buffer = deque()
 
     def __len__(self) -> int:
         """Calculates length of buffer
