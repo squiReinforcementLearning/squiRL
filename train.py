@@ -22,13 +22,12 @@ def train(hparams) -> None:
     """
     if hparams.debug:
         hparams.logger = None
-        # hparams.profiler = AdvancedProfiler()
+        profiler = True
     else:
         hparams.logger = WandbLogger(project=hparams.project)
     seed_everything(hparams.seed)
     algorithm = squiRL.reg_algorithms[hparams.algorithm](hparams)
-    trainer = pl.Trainer.from_argparse_args(hparams,
-                                            profiler=AdvancedProfiler())
+    trainer = pl.Trainer.from_argparse_args(hparams, profiler=profiler)
     trainer.fit(algorithm)
 
 
