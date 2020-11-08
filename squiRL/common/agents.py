@@ -1,11 +1,14 @@
 """Base agent class which handles interacting with the environment for
 generating experience
 """
+from typing import Tuple
+
 import gym3
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple
+
 from squiRL.common.data_stream import Experience
 
 
@@ -92,3 +95,6 @@ class Agent:
 
         self.obs = new_obs
         return first
+
+    def reset_all(self):
+        self.obs = np.concatenate([e.callmethod("reset") for e in self.env.envs])
