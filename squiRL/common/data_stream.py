@@ -99,14 +99,13 @@ class RLDataset(IterableDataset):
         """
         self.replay_buffer = replay_buffer
         self.episodes_per_batch = episodes_per_batch
-        # self.steps_per_batch = episodes_per_batch
         self.net = net
         self.agent = agent
         self.num_envs = num_envs
 
     def populate(self) -> None:
         """
-        Samples an entire episode
+        Samples n entire episodes using m vectorized envs
 
         """
         self.total_episodes_sampled = -np.ones([self.num_envs])
@@ -115,8 +114,6 @@ class RLDataset(IterableDataset):
             count += 1
             firsts = self.agent.play_step(self.net)
             self.total_episodes_sampled += firsts
-            # print(firsts, count)
-        # print(self.total_episodes_sampled)
 
     def __iter__(self):
         """Iterates over sampled batch
