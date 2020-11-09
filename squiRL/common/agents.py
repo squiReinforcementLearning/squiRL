@@ -92,7 +92,7 @@ class Agent:
         reward, new_obs, first = self.env.observe()
         for i, step in enumerate(zip(self.obs, action, reward, first,
                                      new_obs)):
-            step = {k: v for k, v in zip(Experience._fields, step)}
+            step = dict(zip(Experience._fields, step))
             for k, v in step.items():
                 self.rollouts[k][i].append(v)
             if step['first']:
