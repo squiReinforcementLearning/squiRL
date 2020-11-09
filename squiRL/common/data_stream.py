@@ -109,9 +109,7 @@ class RLDataset(IterableDataset):
 
         """
         self.total_episodes_sampled = -np.ones([self.num_envs])
-        count = 0
         while self.total_episodes_sampled.sum() < self.episodes_per_batch:
-            count += 1
             firsts = self.agent.play_step(self.net)
             self.total_episodes_sampled += firsts
 

@@ -111,16 +111,17 @@ class VPG(pl.LightningModule):
             res.append(copy(sum_r))
         return list(reversed(res))
 
-    def vpg_loss(self, batch: Tuple[torch.Tensor,
-                                    torch.Tensor]) -> torch.Tensor:
+    def vpg_loss(
+        self, batch: Tuple[torch.Tensor, torch.Tensor,
+                           torch.Tensor]) -> torch.Tensor:
         """
         Calculates the loss based on the REINFORCE objective, using the
         discounted
         reward to go per episode step
 
         Args:
-            batch (Tuple[torch.Tensor, torch.Tensor]): Current mini batch of
-            replay data
+            batch (Tuple[torch.Tensor, ,torch.Tensor, torch.Tensor]): Current
+            mini batch of replay data
 
         Returns:
             torch.Tensor: Calculated loss
@@ -163,7 +164,6 @@ class VPG(pl.LightningModule):
 
         actions = torch.split(actions, ind)
         rewards = torch.split(rewards, ind)
-        firsts = torch.split(firsts, ind)
         action_logits = torch.split(self.net(states.float()), ind)
         episode_rewards = []
         loss = 0
