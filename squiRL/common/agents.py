@@ -5,6 +5,7 @@ from typing import Tuple
 
 import gym3
 import numpy as np
+from collections import defaultdict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -33,7 +34,7 @@ class Agent:
         """
         self.env = env
         self.replay_buffer = replay_buffer
-        _, self.obs, _ = self.env.observe()
+        self.reset_all()
 
     def process_obs(self, obs: int) -> torch.Tensor:
         """Converts obs np.array to torch.Tensor for passing through NN
@@ -89,11 +90,26 @@ class Agent:
         # do step in the environment
         self.env.act(action)
         reward, new_obs, first = self.env.observe()
-        exp = Experience(self.obs, action, reward, first, new_obs)
-        self.replay_buffer.append(exp)
+        for i, step in enumerate(zip(self.obs, action, reward, first,
+                                     new_obs)):
+            step = {k: v for k, v in zip(Experience._fields, step)}
+            for k, v in step.items():
+                self.rollouts[k][i].append(v)
+            if step['first']:
+                exp = Experience(*(v[i] for v in self.rollouts.values()))
+                self.replay_buffer.append(exp)
+                for k in self.rollouts.keys():
+                    self.rollouts[k][i] = []
 
         self.obs = new_obs
         return first
 
     def reset_all(self):
-        self.obs = np.concatenate([e.callmethod("reset") for e in self.env.envs])
+        self.obs = np.concatenate(
+            [e.callmethod("reset") for e in self.env.envs])
+        self.rollouts = {i: defaultdict(list) for i in Experience._fields}
+        self.rollouts = {
+            k: {e_k: []
+                for e_k in range(self.obs.shape[0])}
+            for k, v in self.rollouts.items()
+        }

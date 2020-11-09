@@ -3,6 +3,7 @@
 Attributes:
     Experience (namedtuple): An environment step experience
 """
+import random
 import numpy as np
 from torch.utils.data.dataset import IterableDataset
 from collections import deque
@@ -18,19 +19,19 @@ class RolloutCollector:
     """
     Buffer for collecting rollout experiences allowing the agent to learn from
     them
-
     Args:
-        capacity: Size of the buffer
+        episodes_per_batch (int): number of episodes per batch
 
     Attributes:
         replay_buffer (deque): Experience buffer
     """
-    def __init__(self, capacity: int) -> None:
+    def __init__(self, episodes_per_batch: int) -> None:
         """Stores rollout data collected by agents.
 
         Args:
         """
         self.replay_buffer = deque()
+        self.episodes_per_batch = episodes_per_batch
 
     def __len__(self) -> int:
         """Calculates length of buffer
@@ -56,12 +57,14 @@ class RolloutCollector:
         Returns:
             Tuple: Sampled experience
         """
-        states, actions, rewards, firsts, next_states = zip(
-            *[self.replay_buffer[i] for i in range(len(self.replay_buffer))])
+        data = random.sample(self.replay_buffer, self.episodes_per_batch)
+        data = {
+            k: [s[i] for s in self.replay_buffer]
+            for i, k in enumerate(Experience._fields)
+        }
+        data = {k: [np.array(i) for i in v] for k, v in data.items()}
 
-        return (np.array(states), np.array(actions),
-                np.array(rewards, dtype=np.float32),
-                np.array(firsts, dtype=np.bool), np.array(next_states))
+        return data.values()
 
     def empty_buffer(self) -> None:
         """Empty replay buffer
@@ -108,8 +111,11 @@ class RLDataset(IterableDataset):
         Samples n entire episodes using m vectorized envs
 
         """
-        self.total_episodes_sampled = -np.ones([self.num_envs])
-        while self.total_episodes_sampled.sum() < self.episodes_per_batch:
+        self.total_episodes_sampled = np.zeros([self.num_envs])
+        self.agent.reset_all()
+        while self.total_episodes_sampled.sum(
+        ) < self.episodes_per_batch or np.count_nonzero(
+                self.total_episodes_sampled == 0) > 0:
             firsts = self.agent.play_step(self.net)
             self.total_episodes_sampled += firsts
 
@@ -122,6 +128,5 @@ class RLDataset(IterableDataset):
         self.populate()
         states, actions, rewards, firsts, new_states = self.replay_buffer.sample(
         )
-        yield (states, actions, rewards, firsts, new_states,
-               self.total_episodes_sampled)
+        yield (states, actions, rewards, firsts, new_states)
         self.replay_buffer.empty_buffer()

@@ -48,7 +48,7 @@ class VPG(pl.LightningModule):
         n_actions = self.env.ac_space.eltype.n
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
-        self.replay_buffer = RolloutCollector(self.hparams.episode_length)
+        self.replay_buffer = RolloutCollector(self.hparams.episodes_per_batch)
 
         self.agent = Agent(self.env, self.replay_buffer)
 
@@ -155,25 +155,17 @@ class VPG(pl.LightningModule):
             nb_batch (TYPE): Current index of mini batch of replay data
         """
         states, actions, rewards, firsts, _ = batch
-        ind = torch.nonzero(firsts).squeeze().numpy().tolist() + [
-            firsts.shape[0]
-        ]
-        ind = np.add(ind, 1).tolist()
-        ind = [ind[0]] + [i - j for j, i in zip(ind, ind[1:])]
-        ind = ind[1:]
+        ind = [len(i) for i in firsts]
 
-        actions = torch.split(actions, ind)
-        rewards = torch.split(rewards, ind)
-        action_logits = torch.split(self.net(states.float()), ind)
-        episode_rewards = []
+        action_logits = torch.split(self.net(torch.cat(states).float()), ind)
         loss = 0
         for ep in range(len(actions)):
             if rewards[ep].shape[0] == 1:
                 continue
-            episode_rewards.append(rewards[ep].sum().item())
             loss += self.vpg_loss(
                 (action_logits[ep], actions[ep], rewards[ep]))
-        mean_episode_reward = torch.tensor(np.mean(episode_rewards))
+        mean_episode_reward = torch.tensor(
+            np.mean([i.sum().item() for i in rewards]))
 
         result = pl.TrainResult(loss)
         result.log('loss',
