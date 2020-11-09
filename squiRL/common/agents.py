@@ -64,8 +64,8 @@ class Agent:
         action_logit = net(obs)
         probs = F.softmax(action_logit, dim=-1)
         dist = torch.distributions.Categorical(probs)
-        action = dist.sample().squeeze()
-        action = action.item() if action.ndim == 0 else action.numpy()
+        action = dist.sample().squeeze().numpy()
+        action = np.expand_dims(action, axis=0) if action.ndim == 0 else action
         return action
 
     @torch.no_grad()
@@ -85,7 +85,6 @@ class Agent:
             done (bool): Indicates if a step is terminal
         """
         action = self.get_action(net)
-        action = [action] if type(action) == int else action
 
         # do step in the environment
         self.env.act(action)
