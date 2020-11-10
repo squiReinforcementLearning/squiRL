@@ -59,7 +59,7 @@ class RolloutCollector:
         """
         data = random.sample(self.replay_buffer, self.episodes_per_batch)
         data = {
-            k: [s[i] for s in data]
+            k: [s[i] for s in self.replay_buffer]
             for i, k in enumerate(Experience._fields)
         }
         data = {k: [np.array(i) for i in v] for k, v in data.items()}
