@@ -22,6 +22,7 @@ class Agent:
 
     Attributes:
         env (gym3.Env): OpenAI gym training environment
+        n_envs (int): Number of vectorized envs
         obs (int): Array of env observation state
         replay_buffer (TYPE): Data collector for saving experience
     """
@@ -33,6 +34,7 @@ class Agent:
             replay_buffer (TYPE): Data collector for saving experience
         """
         self.env = env
+        self.n_envs = self.env.num
         self.replay_buffer = replay_buffer
         self.reset_all()
 
@@ -90,12 +92,21 @@ class Agent:
         # do step in the environment
         self.env.act(action)
         reward, new_obs, first = self.env.observe()
-        for i, step in enumerate(zip(self.obs, action, reward, first,
-                                     new_obs)):
-            step = dict(zip(Experience._fields, step))
-            for k, v in step.items():
-                self.rollouts[k][i].append(v)
-            if step['first']:
+
+        s = dict(
+            zip(Experience._fields,
+                (self.obs, action, reward, first, new_obs)))
+        step = {
+            k: {e_k: []
+                for e_k in range(self.n_envs)}
+            for k in self.rollouts.keys()
+        }
+        step = {k: {e_k: s[k][e_k] for e_k in v} for k, v in step.items()}
+
+        for i in range(self.n_envs):
+            for k in Experience._fields:
+                self.rollouts[k][i].append(step[k][i])
+            if step['first'][i]:
                 exp = Experience(*(v[i] for v in self.rollouts.values()))
                 self.replay_buffer.append(exp)
                 for k in self.rollouts.keys():
@@ -110,6 +121,6 @@ class Agent:
         self.rollouts = {i: defaultdict(list) for i in Experience._fields}
         self.rollouts = {
             k: {e_k: []
-                for e_k in range(self.obs.shape[0])}
+                for e_k in range(self.n_envs)}
             for k, v in self.rollouts.items()
         }
