@@ -99,7 +99,7 @@ class Agent:
         step = {
             k: {e_k: []
                 for e_k in range(self.n_envs)}
-            for k in self.rollouts.keys()
+            for k in Experience._fields
         }
         step = {k: {e_k: s[k][e_k] for e_k in v} for k, v in step.items()}
 
@@ -109,7 +109,7 @@ class Agent:
             if step['first'][i]:
                 exp = Experience(*(v[i] for v in self.rollouts.values()))
                 self.replay_buffer.append(exp)
-                for k in self.rollouts.keys():
+                for k in Experience._fields:
                     self.rollouts[k][i] = []
 
         self.obs = new_obs
