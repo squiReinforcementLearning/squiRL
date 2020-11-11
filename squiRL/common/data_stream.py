@@ -3,38 +3,35 @@
 Attributes:
     Experience (namedtuple): An environment step experience
 """
+import random
 import numpy as np
 from torch.utils.data.dataset import IterableDataset
 from collections import deque
 from collections import namedtuple
 from squiRL.common.policies import MLP
-import gym
 from typing import Tuple
 
 Experience = namedtuple('Experience',
-                        ('state', 'action', 'reward', 'done', 'next_state'))
+                        ('state', 'action', 'reward', 'first', 'next_state'))
 
 
 class RolloutCollector:
     """
     Buffer for collecting rollout experiences allowing the agent to learn from
     them
-
     Args:
-        capacity: Size of the buffer
+        episodes_per_batch (int): number of episodes per batch
 
     Attributes:
-        capacity (int): Size of the buffer
         replay_buffer (deque): Experience buffer
     """
-    def __init__(self, capacity: int) -> None:
-        """Summary
+    def __init__(self, episodes_per_batch: int) -> None:
+        """Stores rollout data collected by agents.
 
         Args:
-            capacity (int): Description
         """
-        self.capacity = capacity
-        self.replay_buffer = deque(maxlen=self.capacity)
+        self.replay_buffer = deque()
+        self.episodes_per_batch = episodes_per_batch
 
     def __len__(self) -> int:
         """Calculates length of buffer
@@ -49,7 +46,7 @@ class RolloutCollector:
         Add experience to the buffer
 
         Args:
-            experience (Experience): Tuple (state, action, reward, done,
+            experience (Experience): Tuple (state, action, reward, first,
             new_state)
         """
         self.replay_buffer.append(experience)
@@ -60,12 +57,14 @@ class RolloutCollector:
         Returns:
             Tuple: Sampled experience
         """
-        states, actions, rewards, dones, next_states = zip(
-            *[self.replay_buffer[i] for i in range(len(self.replay_buffer))])
+        data = random.sample(self.replay_buffer, self.episodes_per_batch)
+        data = {
+            k: [s[i] for s in data]
+            for i, k in enumerate(Experience._fields)
+        }
+        data = {k: [np.array(i) for i in v] for k, v in data.items()}
 
-        return (np.array(states), np.array(actions),
-                np.array(rewards, dtype=np.float32),
-                np.array(dones, dtype=np.bool), np.array(next_states))
+        return data.values()
 
     def empty_buffer(self) -> None:
         """Empty replay buffer
@@ -84,33 +83,41 @@ class RLDataset(IterableDataset):
 
     Attributes:
         agent (Agent): Agent that interacts with env
-        env (gym.Env): OpenAI gym environment
+        episodes_per_batch (int): number of episodes per batch
         net (nn.Module): Policy network
+        num_envs (int): Number of vectorized envs
         replay_buffer: Replay buffer
     """
     def __init__(self, replay_buffer: RolloutCollector,
-                 episodes_per_batch: int, net: MLP, agent) -> None:
+                 episodes_per_batch: int, net: MLP, agent,
+                 num_envs: int) -> None:
         """Summary
 
         Args:
             replay_buffer (RolloutCollector): Description
-            env (gym.Env): OpenAI gym environment
+            episodes_per_batch (int): number of episodes per batch
             net (nn.Module): Policy network
+            num_envs (int): Number of vectorized envs
             agent (Agent): Agent that interacts with env
         """
         self.replay_buffer = replay_buffer
         self.episodes_per_batch = episodes_per_batch
         self.net = net
         self.agent = agent
+        self.num_envs = num_envs
 
     def populate(self) -> None:
         """
-        Samples an entire episode
+        Samples n entire episodes using m vectorized envs
 
         """
-        done = False
-        while not done:
-            reward, done = self.agent.play_step(self.net)
+        self.total_episodes_sampled = np.zeros([self.num_envs])
+        self.agent.reset_all()
+        while self.total_episodes_sampled.sum(
+        ) < self.episodes_per_batch or np.count_nonzero(
+                self.total_episodes_sampled == 0) > 0:
+            firsts = self.agent.play_step(self.net)
+            self.total_episodes_sampled += firsts
 
     def __iter__(self):
         """Iterates over sampled batch
@@ -118,9 +125,8 @@ class RLDataset(IterableDataset):
         Yields:
             Tuple: Sampled experience
         """
-        for i in range(self.episodes_per_batch):
-            self.populate()
-            states, actions, rewards, dones, new_states = self.replay_buffer.sample(
+        self.populate()
+        states, actions, rewards, firsts, new_states = self.replay_buffer.sample(
         )
-            yield (states, actions, rewards, dones, new_states)
-            self.replay_buffer.empty_buffer()
+        yield (states, actions, rewards, firsts, new_states)
+        self.replay_buffer.empty_buffer()
