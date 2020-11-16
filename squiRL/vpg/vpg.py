@@ -169,13 +169,13 @@ class VPG(pl.LightningModule):
 
         self.log('loss',
                  loss,
-                 on_step=True,
+                 on_step=False,
                  on_epoch=True,
                  prog_bar=False,
                  logger=True)
         self.log('mean_episode_reward',
                  mean_episode_reward,
-                 on_step=True,
+                 on_step=False,
                  on_epoch=True,
                  prog_bar=True,
                  logger=True)
