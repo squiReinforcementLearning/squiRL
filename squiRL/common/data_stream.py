@@ -4,12 +4,14 @@ Attributes:
     Experience (namedtuple): An environment step experience
 """
 import random
-import numpy as np
-from torch.utils.data.dataset import IterableDataset
 from collections import deque
 from collections import namedtuple
-from squiRL.common.policies import MLP
 from typing import Tuple
+
+import numpy as np
+from torch.utils.data.dataset import IterableDataset
+
+from squiRL.common.policies import MLP
 
 Experience = namedtuple('Experience',
                         ('state', 'action', 'reward', 'first', 'next_state'))
@@ -130,3 +132,47 @@ class RLDataset(IterableDataset):
         )
         yield (states, actions, rewards, firsts, new_states)
         self.replay_buffer.empty_buffer()
+
+
+class ExperienceReplayBuffer:
+    def __init__(self, size: int, batch_size: int):
+        self.replay_buffer = deque(maxlen=size)
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return len(self.replay_buffer)
+
+    def append(self, exp: Experience):
+        self.replay_buffer.append(exp)
+
+    def sample(self):
+        if len(self.replay_buffer) <= self.batch_size:
+            return self.replay_buffer.copy()
+
+        # Warning: replace=False makes random.choice O(n)
+        return np.random.choice(self.replay_buffer, self.batch_size, replace=True)
+
+    def empty_buffer(self) -> None:
+        """Empty replay buffer
+        """
+        self.replay_buffer.clear()
+
+
+class ExperienceReplayDataset(IterableDataset):
+    def __init__(self, replay_buffer: ExperienceReplayBuffer, episodes_per_epoch: int) -> None:
+        """Summary
+
+        Args:
+            replay_buffer (ExperienceReplayBuffer): Description
+        """
+        self.replay_buffer = replay_buffer
+        self.episodes_per_epoch = episodes_per_epoch
+
+    def __iter__(self):
+        """Iterates over samples from the experience replay buffer
+
+        Yields:
+            List: Tuples of sampled experiences
+        """
+        for i in range(self.episodes_per_epoch):
+            yield self.replay_buffer.sample()

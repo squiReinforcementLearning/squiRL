@@ -39,6 +39,7 @@ class VPG(pl.LightningModule):
         """
         super(VPG, self).__init__()
         self.hparams = hparams
+        self.save_hyperparameters()
 
         self.env = gym3.vectorize_gym(num=self.hparams.num_envs,
                                       env_kwargs={"id": self.hparams.env})
