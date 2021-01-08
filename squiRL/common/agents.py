@@ -189,6 +189,7 @@ class GreedyAgent:
         _, actions = torch.max(q_values, dim=1)
 
         random_idx = np.random.random(self.n_envs) < self.epsilon
+        #TODO: check this
         actions[random_idx] = np.random.randint(0, self.env.ac_space.eltype.n, len(random_idx))
 
         return actions.detach().cpu().numpy()
@@ -211,7 +212,7 @@ class GreedyAgent:
         """
         action = self.get_action(net)
 
-        ######## update epsilon
+        self.update_epsilon()
 
         # do step in the environment
         self.env.act(action)
