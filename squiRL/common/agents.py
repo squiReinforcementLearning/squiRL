@@ -167,7 +167,7 @@ class GreedyAgent:
         Returns:
             torch.Tensor: Torch tensor of observation
         """
-        return torch.from_numpy(obs).float().unsqueeze(0).to(device)
+        return torch.from_numpy(obs).float().to(device)
 
     def get_action(
         self,
@@ -187,12 +187,12 @@ class GreedyAgent:
 
         q_values = net(obs)
         _, actions = torch.max(q_values, dim=1)
+        actions = actions.detach().cpu().numpy()
 
         random_idx = np.random.random(self.n_envs) < self.epsilon
-        #TODO: check this
-        actions[random_idx] = np.random.randint(0, self.env.ac_space.eltype.n, len(random_idx))
+        actions[random_idx] = np.random.randint(0, self.env.ac_space.eltype.n, len(random_idx))[random_idx]
 
-        return actions.detach().cpu().numpy()
+        return actions
 
     @torch.no_grad()
     def play_step(

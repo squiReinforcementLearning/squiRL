@@ -159,14 +159,14 @@ class ExperienceReplayBuffer:
 
 
 class ExperienceReplayDataset(IterableDataset):
-    def __init__(self, replay_buffer: ExperienceReplayBuffer, episodes_per_epoch: int) -> None:
+    def __init__(self, replay_buffer: ExperienceReplayBuffer, batches_per_epoch: int) -> None:
         """Summary
 
         Args:
             replay_buffer (ExperienceReplayBuffer): Description
         """
         self.replay_buffer = replay_buffer
-        self.episodes_per_epoch = episodes_per_epoch
+        self.batches_per_epoch = batches_per_epoch
 
     def __iter__(self):
         """Iterates over samples from the experience replay buffer
@@ -174,5 +174,5 @@ class ExperienceReplayDataset(IterableDataset):
         Yields:
             List: Tuples of sampled experiences
         """
-        for i in range(self.episodes_per_epoch):
+        for i in range(self.batches_per_epoch):
             yield self.replay_buffer.sample()

@@ -23,12 +23,11 @@ class DQN(pl.LightningModule):
         self.env = gym3.vectorize_gym(num=self.hparams.num_envs,
                                       env_kwargs={"id": self.hparams.env})
         self.gamma = self.hparams.gamma
-        self.eps = self.hparams.eps
-        obs_size = self.env.obs_space.shape
-        action_size = self.env.ac_space.shape
+        obs_size = self.env.ob_space.size
+        n_actions = self.env.ac_space.eltype.n
 
-        self.net = reg_policies[self.hparams.policy](obs_size, action_size)
-        self.target_net = reg_policies[self.hparams.policy](obs_size, action_size)
+        self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
+        self.target_net = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.target_net.load_state_dict(self.net.state_dict())
         self.replay_buffer = ExperienceReplayBuffer(self.hparams.buffer_size, self.hparams.batch_size)
 
@@ -82,6 +81,22 @@ class DQN(pl.LightningModule):
                             type=int,
                             default=1000,
                             help="number of sampled batches per epoch")
+        parser.add_argument("--sync_rate",
+                            type=int,
+                            default=1000,
+                            help="how often is the target network updated")
+        parser.add_argument("--buffer_size",
+                            type=int,
+                            default=int(1e6),
+                            help="size of the experience replay buffer")
+        parser.add_argument("--batch_size",
+                            type=int,
+                            default=32,
+                            help="size of minibatch sampled from the replay buffer")
+        parser.add_argument("--start_size",
+                            type=int,
+                            default=int(1e4),
+                            help="initial steps to fill the buffer")
         return parser
 
     # TODO: verify!
@@ -105,6 +120,9 @@ class DQN(pl.LightningModule):
 
     def training_step(self, batch, nb_batch):
         loss = self.calculate_loss(batch)
+
+        if self.global_step % self.hparams.sync_rate == 0:
+            self.target_net.load_state_dict(self.net.state_dict())
 
         self.log('loss',
                  loss,
@@ -130,11 +148,15 @@ class DQN(pl.LightningModule):
             DataLoader: Handles loading the data for training
         """
         dataset = ExperienceReplayDataset(replay_buffer=self.replay_buffer,
-                                          episodes_per_epoch=self.hparams.episodes_per_batch,
-                                          step_function=self.step_once)
+                                          batches_per_epoch=self.hparams.batches_per_epoch)
+
+        # populate the buffer with initial experiences
+        for i in range(self.hparams.start_size):
+            self.step_once()
+
         dataloader = DataLoader(
             dataset=dataset,
-            batch_size=1,
+            batch_size=1, # TODO: check if needs changing
         )
         return dataloader
 
