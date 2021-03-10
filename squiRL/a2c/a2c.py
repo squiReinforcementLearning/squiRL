@@ -68,9 +68,17 @@ class A2C(pl.LightningModule):
                             type=str,
                             default='MLP',
                             help="NN policy used by agent")
-        parser.add_argument("--lr",
+        parser.add_argument("--custom_optimizers",
+                            type=bool,
+                            default=True,
+                            help="this value must not be changed")
+        parser.add_argument("--lr_critic",
                             type=float,
-                            default=0.0005,
+                            default=0.001,
+                            help="learning rate")
+        parser.add_argument("--lr_actor",
+                            type=float,
+                            default=0.001,
                             help="learning rate")
         parser.add_argument("--eps",
                             type=float,
@@ -114,7 +122,7 @@ class A2C(pl.LightningModule):
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
-        discounted_rewards = reward_to_go(rewards, states)
+        discounted_rewards = reward_to_go(rewards, states, self.gamma)
         discounted_rewards = torch.tensor(discounted_rewards).float()
         advantage = discounted_rewards - values
         advantage = advantage.type_as(log_probs)
@@ -138,6 +146,7 @@ class A2C(pl.LightningModule):
             replay data
             nb_batch (TYPE): Current index of mini batch of replay data
         """
+        (actor_optimizer, critic_optimizer) = self.optimizers()
         states, actions, rewards, firsts, _ = batch
         ind = [len(i) for i in firsts]
 
@@ -153,6 +162,15 @@ class A2C(pl.LightningModule):
                  values[ep]))
             actor_loss += ac_loss
             critic_loss += cr_loss
+
+        self.manual_backward(actor_loss, actor_optimizer, retain_graph=True)
+        actor_optimizer.step()
+        self.manual_backward(critic_loss, critic_optimizer)
+        critic_optimizer.step()
+
+        actor_optimizer.zero_grad()
+        critic_optimizer.zero_grad()
+
         mean_episode_reward = torch.tensor(
             np.mean([i.sum().item() for i in rewards]))
 
@@ -184,9 +202,9 @@ class A2C(pl.LightningModule):
             List[Optimizer]: List of used optimizers
         """
         actor_optimizer = optim.Adam(self.actor.parameters(),
-                                     lr=self.hparams.lr)
+                                     lr=self.hparams.lr_actor)
         critic_optimizer = optim.Adam(self.critic.parameters(),
-                                      lr=self.hparams.lr)
+                                      lr=self.hparams.lr_critic)
         return actor_optimizer, critic_optimizer
 
     def __dataloader(self) -> DataLoader:
