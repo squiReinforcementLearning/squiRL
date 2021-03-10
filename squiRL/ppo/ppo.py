@@ -153,7 +153,7 @@ class PPO(pl.LightningModule):
                                  retain_graph=True)
             actor_optimizer.step()
 
-        return actor_loss.mean(), critic_loss.mean()
+        return actor_loss.sum(), critic_loss.mean()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], nb_batch,
                       optimizer_idx) -> OrderedDict:
@@ -184,6 +184,7 @@ class PPO(pl.LightningModule):
                  values[ep]), actor_optimizer)
             actor_loss += ac_loss
             critic_loss += cr_loss
+
         self.manual_backward(cr_loss, critic_optimizer)
         critic_optimizer.step()
         critic_optimizer.zero_grad()
