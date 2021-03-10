@@ -1,7 +1,6 @@
 """Script for training workflow of the Vanilla Policy Gradient Algorithm.
 """
 import argparse
-from copy import copy
 from typing import Tuple, List
 import gym3
 import numpy as np
@@ -13,7 +12,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from collections import OrderedDict
 
-from squiRL.common.utils import collate_episodes
+from squiRL.common.utils import collate_episodes, reward_to_go
 from squiRL.common import reg_policies
 from squiRL.common.data_stream import RLDataset, RolloutCollector
 from squiRL.common.agents import Agent
@@ -95,28 +94,9 @@ class A2C(pl.LightningModule):
                             help="num of parallel envs")
         return parser
 
-    def reward_to_go(self, rewards: torch.Tensor,
-                     states: torch.Tensor) -> torch.tensor:
-        """Calculates reward to go over an entire episode
-
-        Args:
-            rewards (torch.Tensor): Episode rewards
-
-        Returns:
-            torch.tensor: Reward to go for each episode step
-        """
-        rewards = rewards.detach().cpu().numpy()
-        res = []
-        value = self.critic(states[-1])
-        for r in reversed(rewards):
-            value *= self.gamma
-            value += r
-            res.append(copy(value))
-        return list(reversed(res))
-
     def a2c_loss(
-        self, batch: Tuple[torch.Tensor, torch.Tensor,
-                           torch.Tensor]) -> torch.Tensor:
+        self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
         """
         Calculates the actor and critic losses based on the REINFORCE
         objective, using the discounted reward to go per episode step
@@ -134,17 +114,19 @@ class A2C(pl.LightningModule):
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
-        discounted_rewards = self.reward_to_go(rewards, states)
-        discounted_rewards = torch.tensor(discounted_rewards)
+        discounted_rewards = reward_to_go(rewards, states)
+        discounted_rewards = torch.tensor(discounted_rewards).float()
         advantage = discounted_rewards - values
         advantage = advantage.type_as(log_probs)
 
-        actor_loss = -advantage * log_probs
-        critic_loss = 0.5 * advantage.pow(2)
-        return actor_loss.sum(), critic_loss.mean()
+        criterion = torch.nn.MSELoss()
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor],
-                      nb_batch, optimizer_idx) -> OrderedDict:
+        actor_loss = -advantage * log_probs
+        critic_loss = criterion(discounted_rewards, values.view(-1).float())
+        return actor_loss.mean(), critic_loss.mean()
+
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], nb_batch,
+                      optimizer_idx) -> OrderedDict:
         """
         Carries out an entire episode in env and calculates loss
 
@@ -219,7 +201,6 @@ class A2C(pl.LightningModule):
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=collate_episodes,
-            # batch_size=self.hparams.episodes_per_batch,
             batch_size=1,
         )
         return dataloader

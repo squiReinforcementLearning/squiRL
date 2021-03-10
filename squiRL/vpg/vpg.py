@@ -1,7 +1,6 @@
 """Script for training workflow of the Vanilla Policy Gradient Algorithm.
 """
 import argparse
-from copy import copy
 from typing import Tuple, List
 import gym3
 import numpy as np
@@ -13,7 +12,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from collections import OrderedDict
 
-from squiRL.common.utils import collate_episodes
+from squiRL.common.utils import collate_episodes, reward_to_go
 from squiRL.common import reg_policies
 from squiRL.common.data_stream import RLDataset, RolloutCollector
 from squiRL.common.agents import Agent
@@ -93,27 +92,9 @@ class VPG(pl.LightningModule):
                             help="num of parallel envs")
         return parser
 
-    def reward_to_go(self, rewards: torch.Tensor) -> torch.tensor:
-        """Calculates reward to go over an entire episode
-
-        Args:
-            rewards (torch.Tensor): Episode rewards
-
-        Returns:
-            torch.tensor: Reward to go for each episode step
-        """
-        rewards = rewards.detach().cpu().numpy()
-        res = []
-        sum_r = 0.0
-        for r in reversed(rewards):
-            sum_r *= self.gamma
-            sum_r += r
-            res.append(copy(sum_r))
-        return list(reversed(res))
-
     def vpg_loss(
-        self, batch: Tuple[torch.Tensor, torch.Tensor,
-                           torch.Tensor]) -> torch.Tensor:
+        self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
         """
         Calculates the loss based on the REINFORCE objective, using the
         discounted
@@ -132,7 +113,7 @@ class VPG(pl.LightningModule):
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
-        discounted_rewards = self.reward_to_go(rewards)
+        discounted_rewards = reward_to_go(rewards)
         discounted_rewards = torch.tensor(discounted_rewards)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
             discounted_rewards.std() + self.eps)
@@ -203,7 +184,6 @@ class VPG(pl.LightningModule):
         dataloader = DataLoader(
             dataset=dataset,
             collate_fn=collate_episodes,
-            # batch_size=self.hparams.episodes_per_batch,
             batch_size=1,
         )
         return dataloader
