@@ -28,6 +28,8 @@ def train(hparams) -> None:
         profiler = None
     seed_everything(hparams.seed)
     algorithm = squiRL.reg_algorithms[hparams.algorithm](hparams)
+    if args.custom_optimizers:
+        args.automatic_optimization = False
     trainer = pl.Trainer.from_argparse_args(hparams, profiler=profiler)
     trainer.fit(algorithm)
 
@@ -53,7 +55,7 @@ if __name__ == '__main__':
                             type=str,
                             default='VPG',
                             help="DRL algorithm")
-    args, remaining_args = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
     group_alg = parser.add_argument_group(args.algorithm + "_args")
     group_prog.add_argument('--project',
                             type=str,
