@@ -186,7 +186,7 @@ class PPO(pl.LightningModule):
             actor_loss += ac_loss
             critic_loss += cr_loss
 
-        self.manual_backward(cr_loss)
+        self.manual_backward(cr_loss, critic_optimizer)
         critic_optimizer.step()
         critic_optimizer.zero_grad()
 
