@@ -39,6 +39,7 @@ class A2C(pl.LightningModule):
         """
         super(A2C, self).__init__()
         self.hparams = hparams
+        self.automatic_optimization = False
 
         self.env = gym3.vectorize_gym(num=self.hparams.num_envs,
                                       env_kwargs={"id": self.hparams.env})
@@ -68,10 +69,6 @@ class A2C(pl.LightningModule):
                             type=str,
                             default='MLP',
                             help="NN policy used by agent")
-        parser.add_argument("--custom_optimizers",
-                            type=bool,
-                            default=True,
-                            help="this value must not be changed")
         parser.add_argument("--lr_critic",
                             type=float,
                             default=0.001,
@@ -122,7 +119,7 @@ class A2C(pl.LightningModule):
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
-        discounted_rewards = reward_to_go(rewards, states, self.gamma)
+        discounted_rewards = reward_to_go(rewards, self.gamma)
         discounted_rewards = torch.tensor(discounted_rewards).float()
         advantage = discounted_rewards - values
         advantage = advantage.type_as(log_probs)

@@ -113,7 +113,7 @@ class VPG(pl.LightningModule):
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
 
-        discounted_rewards = reward_to_go(rewards)
+        discounted_rewards = reward_to_go(rewards, self.gamma)
         discounted_rewards = torch.tensor(discounted_rewards)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
             discounted_rewards.std() + self.eps)

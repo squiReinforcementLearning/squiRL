@@ -20,8 +20,7 @@ def collate_episodes(batch):
     return batch_dict.values()
 
 
-def reward_to_go(rewards: torch.Tensor, states: torch.Tensor,
-                 gamma: float) -> torch.tensor:
+def reward_to_go(rewards: torch.Tensor, gamma: float) -> torch.tensor:
     """Calculates reward to go over an entire episode
 
     Args:
