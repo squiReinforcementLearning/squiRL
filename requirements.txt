@@ -2,7 +2,7 @@ gym==0.17.2
 gym3==0.3.3
 msgpack-numpy==0.4.3.2
 numpy==1.18.1
-pytorch-lightning==1.0.6
+pytorch-lightning==1.2.3
 pytorch_lightning-bolts==0.2.5
 pytorch-transformers==1.1.0
 torch==1.6.0

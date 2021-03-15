@@ -30,27 +30,24 @@ def train(hparams) -> None:
         hparams.logger = WandbLogger(project=hparams.project)
         hparams.logger.experiment
         profiler = None
-
-    cwd = os.getcwd()
-    path = os.path.join(cwd, 'models')
-    if not os.path.exists(path):
-        os.mkdir(path)
-    path = os.path.join(path, hparams.logger.version)
-    if not os.path.exists(path):
-        os.mkdir(path)
-    path = os.path.join(path, hparams.logger.version)
-    if hparams.save_config:
-        with open(path + '.json', 'wt') as f:
-            config = vars(hparams).copy()
-            config.pop("logger")
-            config.pop("gpus")
-            config.pop("tpu_cores")
-            json.dump(config, f, indent=4)
+        cwd = os.getcwd()
+        path = os.path.join(cwd, 'models')
+        if not os.path.exists(path):
+            os.mkdir(path)
+        path = os.path.join(path, hparams.logger.version)
+        if not os.path.exists(path):
+            os.mkdir(path)
+        path = os.path.join(path, hparams.logger.version)
+        if hparams.save_config:
+            with open(path + '.json', 'wt') as f:
+                config = vars(hparams).copy()
+                config.pop("logger")
+                config.pop("gpus")
+                config.pop("tpu_cores")
+                json.dump(config, f, indent=4)
 
     seed_everything(hparams.seed)
     algorithm = squiRL.reg_algorithms[hparams.algorithm](hparams)
-    if args.custom_optimizers:
-        args.automatic_optimization = False
     trainer = pl.Trainer.from_argparse_args(hparams, profiler=profiler)
     trainer.fit(algorithm)
 
