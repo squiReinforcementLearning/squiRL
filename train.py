@@ -9,6 +9,7 @@ Attributes:
 import os
 import json
 import argparse
+from shutil import copyfile
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.seed import seed_everything
 import pytorch_lightning as pl
@@ -39,12 +40,16 @@ def train(hparams) -> None:
             os.mkdir(path)
         path = os.path.join(path, hparams.logger.version)
         if hparams.save_config:
-            with open(path + '.json', 'wt') as f:
+            with open(path + '_init.json', 'wt') as f:
                 config = vars(hparams).copy()
                 config.pop("logger")
                 config.pop("gpus")
                 config.pop("tpu_cores")
                 json.dump(config, f, indent=4)
+            copyfile(path + '_init.json',
+                     hparams.logger.save_dir + "/config_all.json")
+            copyfile(hparams.load_config,
+                     hparams.logger.save_dir + "/config_init.json")
 
     seed_everything(hparams.seed)
     algorithm = squiRL.reg_algorithms[hparams.algorithm](hparams)

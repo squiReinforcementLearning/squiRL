@@ -11,3 +11,4 @@ torchtext==0.4.0
 torchvision==0.7.0
 typing==3.7.4.1
 typing-extensions==3.7.4.1
+wandb==0.10.22

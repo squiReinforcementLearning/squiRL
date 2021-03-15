@@ -47,6 +47,8 @@ class VPG(pl.LightningModule):
         n_actions = self.env.ac_space.eltype.n
 
         self.net = reg_policies[self.hparams.policy](obs_size, n_actions)
+        if hparams.logger:
+            hparams.logger.watch(self.net)
         self.replay_buffer = RolloutCollector(self.hparams.episodes_per_batch)
 
         self.agent = Agent(self.env, self.replay_buffer)
@@ -114,7 +116,6 @@ class VPG(pl.LightningModule):
                                                      actions]
 
         discounted_rewards = reward_to_go(rewards, self.gamma)
-        discounted_rewards = torch.tensor(discounted_rewards)
         advantage = (discounted_rewards - discounted_rewards.mean()) / (
             discounted_rewards.std() + self.eps)
         advantage = advantage.type_as(log_probs)

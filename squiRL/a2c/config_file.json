@@ -1,10 +1,11 @@
 {
     "project": "squirl",
-    "algorithm": "VPG",
+    "algorithm": "A2C",
     "policy": "MLP",
     "env": "CartPole-v0",
     "seed": 42,
-    "lr": 0.0005,
+    "lr_actor": 0.0005,
+    "lr_critic": 0.0005,
     "gamma": 0.99,
     "episodes_per_batch": 5,
     "num_envs": 5,
