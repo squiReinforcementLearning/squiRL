@@ -5,7 +5,7 @@ name: Performance Checker
 
 on:
   pull_request:
-    branches: [ labeled ]
+    types: [ labeled ]
 
 jobs:
   build:
