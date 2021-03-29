@@ -9,6 +9,7 @@ Attributes:
 import os
 import json
 import argparse
+import gitinfo
 from shutil import copyfile
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.seed import seed_everything
@@ -58,12 +59,20 @@ def train(hparams) -> None:
 
 
 if __name__ == '__main__':
-    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    # enables pdb debugging
+    __spec__ = '''ModuleSpec(name='builtins', loader=<class '_frozen_importlib.
+    BuiltinImporter'>)'''
+
     parser = argparse.ArgumentParser(add_help=False)
     group_prog = parser.add_argument_group("program_args")
     group_env = parser.add_argument_group("environment_args")
 
     # add PROGRAM level args
+    parser.add_argument(
+        '--git_commit',
+        type=str,
+        default=gitinfo.get_git_info()['commit'],
+        help='current git commit')
     parser.add_argument(
         '--save_config',
         type=bool,
