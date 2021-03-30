@@ -24,6 +24,7 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test performance of all algorithms to ensure nothing broke
       run: |
-        git_hash=$(git rev-parse --short "$GITHUB_SHA")
         echo $git_hash
         python train.py --git_commit=$git_hash --load_config=configs/*
+      env:
+        git_hash: $(git rev-parse --short "$GITHUB_SHA")
