@@ -24,4 +24,4 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test performance of all algorithms to ensure nothing broke
       run: |
-        python ~/train.py --load_config ~/configs/*
+        python train.py --load_config configs/*
