@@ -25,4 +25,4 @@ jobs:
     - name: Test performance of all algorithms to ensure nothing broke
       run: |
         echo "COMMIT $(git rev-parse "$GITHUB_SHA")"
-        python train.py --git_commit=BLAH --load_config=configs/*
+        python train.py --git_commit="BLAH" --load_config=configs/*
