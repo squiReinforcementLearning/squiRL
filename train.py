@@ -34,6 +34,8 @@ def train(hparams) -> None:
         profiler = None
         cwd = os.getcwd()
         path = os.path.join(cwd, 'models')
+        if hparams.git_commit is None:
+            args.git_commit = gitinfo.get_git_info()['commit']
         if not os.path.exists(path):
             os.mkdir(path)
         path = os.path.join(path, hparams.logger.version)
@@ -68,11 +70,10 @@ if __name__ == '__main__':
     group_env = parser.add_argument_group("environment_args")
 
     # add PROGRAM level args
-    parser.add_argument(
-        '--git_commit',
-        type=str,
-        default=gitinfo.get_git_info()['commit'],
-        help='current git commit')
+    parser.add_argument('--git_commit',
+                        type=str,
+                        default=None,
+                        help='current git commit')
     parser.add_argument(
         '--save_config',
         type=bool,
