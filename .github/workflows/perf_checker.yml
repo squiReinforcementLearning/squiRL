@@ -22,11 +22,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Test performance of all algorithms to ensure nothing broke
+    - name: Run all experiments defined in configs
       env:
         WANDB_API_KEY: ${{ secrets.AGKHALIL_WANDB_API_KEY }}
       run: |
         for config_file in configs/*; do
-          python train.py --git_commit=$(git rev-parse "$GITHUB_SHA") --load_config=$config_file
+          for i in `seq 0 4`; do
+            python train.py --git_commit=$(git rev-parse "$GITHUB_SHA") --load_config=$config_file
+          done
         done
-        ls -a
+        
