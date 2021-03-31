@@ -26,5 +26,5 @@ jobs:
       env:
         WANDB_API_KEY: ${{ secrets.AGKHALIL_WANDB_API_KEY }}
       run: |
-        echo "COMMIT $(git rev-parse "$GITHUB_SHA")"
-        python train.py --git_commit="BLAH" --load_config=configs/cartpole_ppo.json
+        python train.py --git_commit=$(git rev-parse "$GITHUB_SHA") --load_config=configs/*
+        ls -a
