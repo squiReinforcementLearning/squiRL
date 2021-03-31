@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    if: ${{ github.event.label.name == 'breaker' }}
+    if: ${{ github.event.label.name == 'check_performance' }}
     runs-on: ubuntu-latest
 
     steps:
