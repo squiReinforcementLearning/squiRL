@@ -23,6 +23,8 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test performance of all algorithms to ensure nothing broke
+      env:
+        WANDB_API_KEY: ${{ secrets.AGKHALIL_WANDB_API_KEY }}
       run: |
         echo "COMMIT $(git rev-parse "$GITHUB_SHA")"
         python train.py --git_commit="BLAH" --load_config=configs/cartpole_ppo.json
