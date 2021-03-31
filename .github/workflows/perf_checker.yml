@@ -26,7 +26,7 @@ jobs:
       env:
         WANDB_API_KEY: ${{ secrets.SQUIRL_WANDB_API_SECRET }}
       run: |
-        for config_file in configs/*; do
+        for config_file in configs/*/*/*; do
           for i in `seq 0 4`; do
             python train.py --git_commit=$(git rev-parse "$GITHUB_SHA") --load_config=$config_file
           done
