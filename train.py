@@ -8,6 +8,7 @@ Attributes:
 """
 import os
 import json
+import random
 import argparse
 import gitinfo
 from shutil import copyfile
@@ -84,7 +85,7 @@ if __name__ == '__main__':
                         help='Load from json file. Command line override.')
     group_prog.add_argument('--seed',
                             type=int,
-                            default=42,
+                            default=random.randint(0, 1000),
                             help="experiment seed")
     group_prog.add_argument(
         '--debug',
