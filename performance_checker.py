@@ -23,14 +23,16 @@ for model in os.listdir("models"):
             failures[algorithm] = {}
         failures[algorithm][model] = {}
         run = api.run("agkhalil/squiRL/" + model)
+        wandb_mean_rewards = run.history(keys=['mean_episode_reward'],
+                                         pandas=False)
         mean_reward = np.mean(
-            run.history(keys=["mean_episode_reward"])
-            ["mean_episode_reward"].tolist()[-100:])
+            [i['mean_episode_reward'] for i in wandb_mean_rewards])
         print(model, mean_reward)
         alg_means[data[model]['algorithm']][model] = mean_reward
         if mean_reward < thresh[data[model]['env']]:
             failures[algorithm][model]["env"] = data[model]['env']
-            failures[algorithm][model]["threshold"] = thresh[data[model]['env']]
+            failures[algorithm][model]["threshold"] = thresh[data[model]
+                                                             ['env']]
             failures[algorithm][model]["mean_last_100_steps"] = mean_reward
 
 alg_failures = {}
@@ -43,4 +45,6 @@ for k, v in alg_means.items():
             alg_failures[k] = alg_mean
 
 assert not bool(
-    alg_failures) == True, "The following algorithms have failed:\n" + str(alg_failures.keys()) + "\nHere are all failed runs of each algorithm:\n" + str(failures)
+    alg_failures) == True, "The following algorithms have failed:\n" + str(
+        alg_failures.keys(
+        )) + "\nHere are all failed runs of each algorithm:\n" + str(failures)
