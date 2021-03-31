@@ -24,10 +24,10 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Run all experiments defined in configs
       env:
-        WANDB_API_KEY: ${{ secrets.AGKHALIL_WANDB_API_KEY }}
+        WANDB_API_KEY: ${{ secrets.SQUIRL_WANDB_API_KEY }}
       run: |
         for config_file in configs/*; do
-          for i in `seq 0 2`; do
+          for i in `seq 0 4`; do
             python train.py --git_commit=$(git rev-parse "$GITHUB_SHA") --load_config=$config_file
           done
           python performance_checker.py
