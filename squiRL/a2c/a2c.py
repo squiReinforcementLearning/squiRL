@@ -50,6 +50,9 @@ class A2C(pl.LightningModule):
 
         self.actor = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.critic = reg_policies[self.hparams.policy](obs_size, 1)
+        if hparams.logger:
+            hparams.logger.watch(self.actor)
+            hparams.logger.watch(self.critic)
         self.replay_buffer = RolloutCollector(self.hparams.episodes_per_batch)
 
         self.agent = Agent(self.env, self.replay_buffer)
@@ -120,7 +123,6 @@ class A2C(pl.LightningModule):
                                                      actions]
 
         discounted_rewards = reward_to_go(rewards, self.gamma)
-        discounted_rewards = torch.tensor(discounted_rewards).float()
         advantage = discounted_rewards - values
         advantage = advantage.type_as(log_probs)
 

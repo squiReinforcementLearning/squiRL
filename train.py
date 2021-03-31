@@ -8,7 +8,10 @@ Attributes:
 """
 import os
 import json
+import random
 import argparse
+import gitinfo
+from shutil import copyfile
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.seed import seed_everything
 import pytorch_lightning as pl
@@ -32,6 +35,8 @@ def train(hparams) -> None:
         profiler = None
         cwd = os.getcwd()
         path = os.path.join(cwd, 'models')
+        if hparams.git_commit is None:
+            args.git_commit = gitinfo.get_git_info()['commit']
         if not os.path.exists(path):
             os.mkdir(path)
         path = os.path.join(path, hparams.logger.version)
@@ -39,12 +44,16 @@ def train(hparams) -> None:
             os.mkdir(path)
         path = os.path.join(path, hparams.logger.version)
         if hparams.save_config:
-            with open(path + '.json', 'wt') as f:
+            with open(path + '_init.json', 'wt') as f:
                 config = vars(hparams).copy()
                 config.pop("logger")
                 config.pop("gpus")
                 config.pop("tpu_cores")
                 json.dump(config, f, indent=4)
+            copyfile(path + '_init.json',
+                     hparams.logger.save_dir + "/config_all.json")
+            copyfile(hparams.load_config,
+                     hparams.logger.save_dir + "/config_init.json")
 
     seed_everything(hparams.seed)
     algorithm = squiRL.reg_algorithms[hparams.algorithm](hparams)
@@ -53,12 +62,19 @@ def train(hparams) -> None:
 
 
 if __name__ == '__main__':
-    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    # enables pdb debugging
+    __spec__ = '''ModuleSpec(name='builtins', loader=<class '_frozen_importlib.
+    BuiltinImporter'>)'''
+
     parser = argparse.ArgumentParser(add_help=False)
     group_prog = parser.add_argument_group("program_args")
     group_env = parser.add_argument_group("environment_args")
 
     # add PROGRAM level args
+    parser.add_argument('--git_commit',
+                        type=str,
+                        default=None,
+                        help='current git commit')
     parser.add_argument(
         '--save_config',
         type=bool,
@@ -69,7 +85,7 @@ if __name__ == '__main__':
                         help='Load from json file. Command line override.')
     group_prog.add_argument('--seed',
                             type=int,
-                            default=42,
+                            default=random.randint(0, 1000),
                             help="experiment seed")
     group_prog.add_argument(
         '--debug',

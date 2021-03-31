@@ -1,6 +1,19 @@
 # squiRL
 An RL library in PyTorch embedded within the PyTorch Lightning framework. Aiming to provide a comprehensive platform for the development and testing of RL algorithms. 
 
+## Performance checker
+DRL research is painful. Writing DRL code is even more so. Throughout development, this repos is bound to go through many changes and some of those changes may break the performance of older code.
+
+To ensure major pull requests don't have undesirable conequences, and to build a comprehensive zoo of algorithms and envs, we introduce the `performance checker` feature. This is a Github workflow automatically triggered on a pull request if labelled `check_performance`.
+
+The workflow runs all experiments specified in the `configs` folder (5 random seeds each). It then compares the average `mean_episode_reward` of the 5 seeds against the respective `env` thresholds specified in `performance_thresh.json`.
+
+For example `configs/cartpole_ppo.json` has the experiment configurations to run `PPO` on Gym's `CartPole-v0`. The workflow runs 5 random seeds. Getting a mean reward larger than `150` means the env is solved. This value, `150` is saved in `performance_thresh.json` under the env name `CartPole-v0`. So the workflow knows that if the mean reward of the 5 seeds doesn't exceed `150`, something is wrong and an error is returned including the specific runs that failed to meet the threshold.
+
+All runs can be found [here](https://wandb.ai/squirl/squirl). They are grouped under their respective git commits.
+
+We ask that any new algorithm implemented be provided with a respective config file as a benchmark. Also any pull request benchmarking on any new env is more than welcome.
+
 ## Branch names
 Branches should be using one of these groups to start with:
 wip - Works in progress; stuff I know won't be finished soon (like a release)

@@ -45,12 +45,17 @@ class PPO(pl.LightningModule):
                                       env_kwargs={"id": self.hparams.env})
         self.gamma = self.hparams.gamma
         self.eps = self.hparams.eps
+        self.actor_updates_per_iter = self.hparams.actor_updates_per_iter
         obs_size = self.env.ob_space.size
         n_actions = self.env.ac_space.eltype.n
 
         self.actor = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.new_actor = reg_policies[self.hparams.policy](obs_size, n_actions)
         self.critic = reg_policies[self.hparams.policy](obs_size, 1)
+        if hparams.logger:
+            hparams.logger.watch(self.actor)
+            hparams.logger.watch(self.new_actor)
+            hparams.logger.watch(self.critic)
         self.replay_buffer = RolloutCollector(self.hparams.episodes_per_batch)
 
         self.agent = Agent(self.env, self.replay_buffer)
@@ -70,10 +75,6 @@ class PPO(pl.LightningModule):
                             type=str,
                             default='MLP',
                             help="NN policy used by agent")
-        parser.add_argument("--custom_optimizers",
-                            type=bool,
-                            default=True,
-                            help="this value must not be changed")
         parser.add_argument("--actor_updates_per_iter",
                             type=int,
                             default=10,
@@ -131,13 +132,12 @@ class PPO(pl.LightningModule):
                                   dim=-1).squeeze(0)[range(len(actions)),
                                                      actions]
         discounted_rewards = reward_to_go(rewards, self.gamma)
-        discounted_rewards = torch.tensor(discounted_rewards).float()
         advantage = discounted_rewards - values
         advantage = advantage.type_as(log_probs)
         criterion = torch.nn.MSELoss()
         critic_loss = criterion(discounted_rewards, values.view(-1).float())
 
-        for _ in range(self.hparams.actor_updates_per_iter):
+        for _ in range(self.actor_updates_per_iter):
             actor_optimizer.zero_grad()
             new_action_logits = self.new_actor(states.float())
             new_log_probs = F.log_softmax(

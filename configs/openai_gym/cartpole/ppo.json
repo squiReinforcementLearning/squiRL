@@ -1,0 +1,14 @@
+{
+    "project": "squirl",
+    "algorithm": "PPO",
+    "policy": "MLP",
+    "env": "CartPole-v0",
+    "actor_updates_per_iter": 20,
+    "clip_rt": 0.1,
+    "lr_actor": 0.0005,
+    "lr_critic": 0.0005,
+    "gamma": 0.99,
+    "episodes_per_batch": 1,
+    "num_envs": 1,
+    "max_epochs": 500
+}
