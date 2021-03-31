@@ -40,9 +40,10 @@ for k, v in alg_means.items():
     means = []
     for nv in v.values():
         means.append(nv)
-        alg_mean = np.mean(means)
-        if alg_mean < thresh[data[model]['env']]:
-            alg_failures[k] = alg_mean
+    alg_mean = np.mean(means)
+    print(alg_mean)
+    if alg_mean < thresh[data[model]['env']]:
+        alg_failures[k] = alg_mean
 
 assert not bool(
     alg_failures) == True, "The following algorithms have failed:\n" + str(
