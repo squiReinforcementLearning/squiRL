@@ -30,5 +30,8 @@ jobs:
           for i in `seq 0 4`; do
             python train.py --git_commit=$(git rev-parse "$GITHUB_SHA") --load_config=$config_file
           done
+          python performance_checker.py
+          rm -r models
+          mkdir models
         done
         
