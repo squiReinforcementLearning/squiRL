@@ -22,7 +22,7 @@ for model in os.listdir("models"):
             alg_means[algorithm] = {}
             failures[algorithm] = {}
         failures[algorithm][model] = {}
-        run = api.run("agkhalil/squiRL/" + model)
+        run = api.run("squirl/squirl/" + model)
         wandb_mean_rewards = run.history(keys=['mean_episode_reward'],
                                          pandas=False)
         mean_reward = np.mean(
