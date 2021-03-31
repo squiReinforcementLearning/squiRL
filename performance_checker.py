@@ -26,7 +26,7 @@ for model in os.listdir("models"):
         wandb_mean_rewards = run.history(keys=['mean_episode_reward'],
                                          pandas=False)
         mean_reward = np.mean(
-            [i['mean_episode_reward'] for i in wandb_mean_rewards])
+            [i['mean_episode_reward'] for i in wandb_mean_rewards][-100:])
         print(model, mean_reward)
         alg_means[data[model]['algorithm']][model] = mean_reward
         if mean_reward < thresh[data[model]['env']]:
